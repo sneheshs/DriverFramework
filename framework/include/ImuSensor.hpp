@@ -61,6 +61,9 @@ struct imu_sensor_data {
 	float		gyro_rad_s_x;
 	float		gyro_rad_s_y;
 	float		gyro_rad_s_z;
+	float       mag_ga_x;
+	float       mag_ga_y;
+	float       mag_ga_z;
 	float		temp_c;
 	uint64_t	read_counter;
 	uint64_t	error_counter;
@@ -75,8 +78,9 @@ struct imu_sensor_data {
 class ImuSensor : public SPIDevObj
 {
 public:
-	ImuSensor(const char *device_path, unsigned int sample_interval_usec) :
-		SPIDevObj("ImuSensor", device_path, IMU_CLASS_PATH, sample_interval_usec)
+	ImuSensor(const char *device_path, unsigned int sample_interval_usec, bool mag_enabled = false) :
+		SPIDevObj("ImuSensor", device_path, IMU_CLASS_PATH, sample_interval_usec),
+		m_mag_enabled(mag_enabled)
 	{}
 
 	~ImuSensor() {}
@@ -101,18 +105,30 @@ public:
 		return ret;
 	}
 
-	static void printImuValues(struct imu_sensor_data &data)
+	static void printImuValues(DevHandle &h, struct imu_sensor_data &data)
 	{
-		DF_LOG_INFO("IMU: accel: [%.2f, %.2f, %.2f] m/s^2",
-			    (double)data.accel_m_s2_x,
-			    (double)data.accel_m_s2_y,
-			    (double)data.accel_m_s2_z);
-		DF_LOG_INFO("     gyro:  [%.2f, %.2f, %.2f] rad/s",
-			    (double)data.gyro_rad_s_x,
-			    (double)data.gyro_rad_s_y,
-			    (double)data.gyro_rad_s_z);
-		DF_LOG_INFO("     temp:  %.2f C",
-			    (double)data.temp_c);
+		ImuSensor *me = DevMgr::getDevObjByHandle<ImuSensor>(h);
+
+		if (me != nullptr) {
+			DF_LOG_INFO("IMU: accel: [%.2f, %.2f, %.2f] m/s^2",
+					(double)data.accel_m_s2_x,
+					(double)data.accel_m_s2_y,
+					(double)data.accel_m_s2_z);
+			DF_LOG_INFO("     gyro:  [%.2f, %.2f, %.2f] rad/s",
+					(double)data.gyro_rad_s_x,
+					(double)data.gyro_rad_s_y,
+					(double)data.gyro_rad_s_z);
+
+			if (me->m_mag_enabled)
+			{
+				DF_LOG_INFO("     mag:  [%.6f, %.6f, %.6f] ga",
+						(double)data.mag_ga_x,
+						(double)data.mag_ga_y,
+						(double)data.mag_ga_z);
+			}
+			DF_LOG_INFO("     temp:  %.2f C",
+					(double)data.temp_c);
+		}
 	}
 
 protected:
@@ -124,7 +140,8 @@ protected:
 	};
 
 	struct imu_sensor_data 		m_sensor_data;
-	SyncObj 			m_synchronize;
+	bool						m_mag_enabled;
+	SyncObj 					m_synchronize;
 };
 
 }; // namespace DriverFramework
