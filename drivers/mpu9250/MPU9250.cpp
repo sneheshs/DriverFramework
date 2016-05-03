@@ -148,7 +148,14 @@
 
 #define BITS_INT_STATUS_FIFO_OVERFLOW	0x10
 
+#define BITS_I2C_MST_CLK_400_KHZ	0x0D
+
 #define MPU9250_ONE_G			9.80665f
+
+// Full Scale Range of the magnetometer chip AK89xx in MPU9250
+#define MPU9250_AK89xx_FSR		4915
+// Magnetometer device ID
+#define MPU9250_AKM_DEV_ID		0x48
 
 #define MIN(_x, _y) (_x) > (_y) ? (_y) : (_x)
 
@@ -167,6 +174,9 @@ int MPU9250::mpu9250_init()
 	m_sensor_data.gyro_rad_s_x = 0.0f;
 	m_sensor_data.gyro_rad_s_y = 0.0f;
 	m_sensor_data.gyro_rad_s_z = 0.0f;
+	m_sensor_data.mag_ga_x = 0.0f;
+	m_sensor_data.mag_ga_y = 0.0f;
+	m_sensor_data.mag_ga_z = 0.0f;
 	m_sensor_data.temp_c = 0.0f;
 
 	m_sensor_data.read_counter = 0;
@@ -276,6 +286,121 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
+	_mag_initialized = false;
+	if (m_mag_enabled) {
+		// Retry up to 5 times to ensure successful initialization of the
+		// sensor's internal I2C bus.
+		int init_max_tries = 5;
+		int ret = 0;
+		int i;
+		for (i = 0; i < mag_init_max_tries; i++) {
+			ret = mpu9x50_initialize_mag(config);
+			if (ret == 0) {
+				break;
+			}
+			FARF(HIGH, "mag initialization failed %d tries", i + 1);
+			usleep(10000);
+		}
+
+		if (ret == 0) {
+			FARF(MEDIUM, "mag initialization succ after %d retries", i);
+			driver_context.mag_enabled = 1;
+		} else {
+			FARF(ALWAYS, "failed to initialize mag!");
+		}
+	}
+
+
+
+	return 0;
+}
+
+int MPU9250::init_mag()
+{
+//	int mag_sample_rate;
+//	int gyro_sample_rate;
+	uint8_t i2c_mst_delay;
+	uint8_t i2c_mst_ctrl = 0;
+	uint8_t user_ctrl = 0;
+	int result;
+
+// TODO-JYW: TESTING-TESTING
+//	gyro_sample_rate = gyro_sample_rate_enum_to_hz(config->gyro_sample_rate);
+//	mag_sample_rate = mag_sample_rate_enum_to_hz(
+//			config->mag_sample_rate);
+
+	// I2C_MST_CTRL
+	// - don't wait for external I2C data (WAIT_FOR_ES = 0),
+	// - set I2C master clock speed as 400KHz
+	// NOTE: I2C rate less than 500KHz may be problematic as we observed
+	// that the magnetometer data ready flag is cleared when the data ready
+	// interrupt fires. Not sure of the exact reason.
+	i2c_mst_ctrl &= ~BIT_WAIT_FOR_ES;
+	i2c_mst_ctrl |= BITS_I2C_MST_CLK_400_KHZ;
+	result = _writeReg(MPUREG_I2C_MST_CTRL, i2c_mst_ctrl);
+	if (result != 0) {
+		DF_LOG_ERR("IMU I2C master bus config failed");
+		return -1;
+	}
+
+	// Configure mpu9250 as I2C master to communicate with mag slave device
+	user_ctrl |= BIT_I2C_MST_EN;
+	result = _writeReg(MPUREG_USER_CTRL, reg_cfg.user_ctrl);
+	if (result != 0) {
+		DF_LOG_ERR("Failed to enabled I2C master mode");
+		return -1;
+	}
+
+	// detect mag presence by reading whoami register
+
+	// TODO-JYW: LEFT-OFF:
+	if (mpu9x50_detect_mag() != 0)
+		return -1;
+	FARF(MEDIUM, "MPU9250 mag detected");
+
+	// get mag calibraion data from Fuse ROM
+	if (mpu9x50_get_mag_senitivity_adjustment() != 0)
+		return -1;
+
+	// Slave 0 reads from slave address 0x0C, i.e. mag
+	mpu_spi_set_reg(MPU9250_REG_I2C_SLV0_ADDR, 0x8c);
+
+	// start reading from register 0x02 ST1
+	mpu_spi_set_reg(MPU9250_REG_I2C_SLV0_REG, 0x02);
+
+	// Enable 8 bytes reading from slave 0 at gyro sample rate
+	// NOTE: mag sample rate is lower than gyro sample rate, so
+	// the same measurement samples are transferred to SLV0 at gyro sample rate.
+	// but this is fine
+	mpu_spi_set_reg(MPU9250_REG_I2C_SLV0_CTRL, 0x88);
+
+	// Slave 1 sets mag measurement mode
+	mpu_spi_set_reg(MPU9250_REG_I2C_SLV1_ADDR, 0x0C);
+
+	// write to mag CNTL1 register
+	mpu_spi_set_reg(MPU9250_REG_I2C_SLV1_REG, MPU9250_COMP_REG_CNTL1);
+
+	// enable 1 byte write on slave 1
+	mpu_spi_set_reg(MPU9250_REG_I2C_SLV1_CTRL, 0x81);
+
+	// set slave 1 data to write
+	// 0x10 indicates use 16bit mag measurement
+	// 0x01 indicates using single measurement mode
+	mpu_spi_set_reg(MPU9250_REG_I2C_SLV1_DO, 0x11);
+
+// TODO-JYW: TESTING-TESTING
+	// conduct 1 trasnfer at delayed sample rate
+	// I2C_MST_DLY = (gryo_sample_rate / campass_sample_rate - 1)
+//	i2c_mst_delay = gyro_sample_rate / mag_sample_rate - 1;
+//	mpu_spi_set_reg(MPU9250_REG_I2C_SLV4_CTRL, i2c_mst_delay);
+//	FARF(MEDIUM, "Set I2C_SLV4_CTRL i2c_mst_dly = %u", i2c_mst_delay);
+
+	// trigger slave 1 transfer every (1+I2C_MST_DLY) samples
+	// every time slave 1 transfer is triggered, a mag measurement conducted
+	// reg_cfg.i2c_mst_delay_ctrl |= BIT_DELAY_ES_SHADOW;
+	reg_cfg.i2c_mst_delay_ctrl |= BIT_SLV1_DLY_EN;
+	mpu_spi_set_reg(MPU9250_REG_I2C_MST_DELAY_CTRL, reg_cfg.i2c_mst_delay_ctrl);
+	FARF(MEDIUM, "Enabled delayed access on I2C slave 4");
 
 	return 0;
 }

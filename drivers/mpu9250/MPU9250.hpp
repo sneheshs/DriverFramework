@@ -57,8 +57,8 @@ namespace DriverFramework
 class MPU9250 : public ImuSensor
 {
 public:
-	MPU9250(const char *device_path) :
-		ImuSensor(device_path, MPU9250_MEASURE_INTERVAL_US),
+	MPU9250(const char *device_path, bool mag_enabled = false) :
+		ImuSensor(device_path, MPU9250_MEASURE_INTERVAL_US, mag_enabled), // true = mag is enabled
 		_last_temp_c(0.0f),
 		_temp_initialized(false)
 	{
@@ -88,6 +88,9 @@ private:
 
 	float _last_temp_c;
 	bool _temp_initialized;
+	float _mag_range_ga;
+	float _mag_scaling;
+	float _mag_initialized;
 };
 
 }; // namespace DriverFramework
