@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2016 Julian Oes. All rights reserved.
+ *   Copyright (C) 2016 James Y. Wilson. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,74 +33,75 @@
 
 #pragma once
 
-#include "ImuSensor.hpp"
-#include "MPU9250_mag.hpp"
+#include "MPU9250.hpp"
 
 namespace DriverFramework
 {
 
-// TODO: use define from some include for this
-#define	M_PI		3.14159265358979323846	/* pi */
+// MPU9250 Magnetometer Register Addresses: Defines only the register addresses
+// used in MPU9250 driver.
+#define MPU9250_MAG_REG_WIA		0x00
+#define MPU9250_MAG_REG_CNTL1	0x0a
+#define MPU9250_MAG_REG_ASAX	0x10
+#define MPU9250_MAG_REG_ASAY    0x11
+#define MPU9250_MAG_REG_ASAZ    0x12
 
-// update frequency 1000 Hz
-#define MPU9250_MEASURE_INTERVAL_US 1000
+// Full Scale Range of the magnetometer chip AK89xx in MPU9250
+#define MPU9250_AK89xx_FSR		4915
 
-// -2000 to 2000 degrees/s, 16 bit signed register, deg to rad conversion
-#define GYRO_RAW_TO_RAD_S 	 (2000.0f / 32768.0f * M_PI / 180.0f)
-
-// TODO: include some common header file (currently in drv_sensor.h).
-#define DRV_DF_DEVTYPE_MPU9250 0x41
-
-#define MPU_WHOAMI_9250			0x71
+// Magnetometer device ID
+#define MPU9250_AKM_DEV_ID		0x48
 
 
-class MPU9250 : public ImuSensor
+class MPU9250_mag
 {
 public:
-	MPU9250(const char *device_path, bool mag_enabled = false) :
-		ImuSensor(device_path, MPU9250_MEASURE_INTERVAL_US, mag_enabled), // true = mag is enabled
-		_last_temp_c(0.0f),
-		_temp_initialized(false)
-	{
-		m_id.dev_id_s.devtype = DRV_DF_DEVTYPE_MPU9250;
-		// TODO: does the WHOAMI make sense as an address?
-		m_id.dev_id_s.address = MPU_WHOAMI_9250;
-	}
+	MPU9250_mag(MPU9250 *imu) :
+		_mag_initialized(false),
+		_imu(imu)
+	{ };
 
-	// @return 0 on success, -errno on failure
-	int writeReg(int reg, uint8_t val)
-	{
-		return _writeReg(reg, val);
-	}
-
-	int readReg(uint8_t address, uint8_t &val)
-	{
-		return _readReg(address, val);
-	}
-
-	// @return 0 on success, -errno on failure
-	virtual int start();
-
-	// @return 0 on success, -errno on failure
-	virtual int stop();
-
-protected:
-	virtual void _measure();
-	virtual int _publish(struct imu_sensor_data &data);
+	// @returns 0 on success, -errno on failure
+	int initialize();
 
 private:
-	// @returns 0 on success, -errno on failure
-	int mpu9250_init();
+	float _mag_range_ga;
+	float _mag_scaling;
+	float _mag_initialized;
+	int _mag_sens_adj[3];
+	MPU9250 *_imu;
 
-	// @return the number of FIFO bytes to collect
-	int get_fifo_count();
-
-	void reset_fifo();
-
-	float _last_temp_c;
-	bool _temp_initialized;
-
-	friend class MPU9250_mag;
+	int _initialize();
 };
 
-}; // namespace DriverFramework
+int _initialize()
+{
+	_mag_initialized = false;
+	// Retry up to 5 times to ensure successful initialization of the
+	// sensor's internal I2C bus.
+	int init_max_tries = 5;
+	int ret = 0;
+	int i;
+	for (i = 0; i < mag_init_max_tries; i++) {
+		ret = _initialize_config(config);
+		if (ret == 0) {
+			break;
+		}
+		FARF(HIGH, "mag initialization failed %d tries", i + 1);
+		usleep(10000);
+	}
+
+	if (ret == 0) {
+		FARF(MEDIUM, "mag initialization succ after %d retries", i);
+		driver_context.mag_enabled = 1;
+	} else {
+		FARF(ALWAYS, "failed to initialize mag!");
+	}
+}
+
+int _initialize_config(void)
+{
+
+}
+
+};
