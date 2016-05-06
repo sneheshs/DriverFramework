@@ -42,8 +42,10 @@ public:
 	static const int TEST_PASS = 0;
 	static const int TEST_FAIL = 1;
 
+	// TODO-JYW: TESTING-TESTING: Should the use of the magnetometer be
+	// parameterized?
 	ImuTester() :
-		m_sensor(IMU_DEVICE_PATH)
+		m_sensor(IMU_DEVICE_PATH, true)
 	{}
 
 	static void readSensorCallback(void *arg);

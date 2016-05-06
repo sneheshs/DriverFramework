@@ -53,6 +53,32 @@ namespace DriverFramework
 
 #define MPU_WHOAMI_9250			0x71
 
+#pragma pack(push, 1)
+struct fifo_packet {
+	int16_t		accel_x;
+	int16_t		accel_y;
+	int16_t		accel_z;
+	int16_t		temp;
+	int16_t		gyro_x;
+	int16_t		gyro_y;
+	int16_t		gyro_z;
+	//uint8_t		ext_data[24];
+};
+struct fifo_packet_with_mag {
+	int16_t		accel_x;
+	int16_t		accel_y;
+	int16_t		accel_z;
+	int16_t		temp;
+	int16_t		gyro_x;
+	int16_t		gyro_y;
+	int16_t		gyro_z;
+	char        mag_st1; // 14 mag ST1 (1B)
+	int16_t     mag_x;   // 15-16 (2B)
+	int16_t     mag_y;   // 17-18 (2B)
+	int16_t     mag_z;   // 19-20 (2B)
+	char        mag_st2; // 21 mag ST2 (1B)
+};
+#pragma pack(pop)
 
 class MPU9250 : public ImuSensor
 {
@@ -60,7 +86,8 @@ public:
 	MPU9250(const char *device_path, bool mag_enabled = false) :
 		ImuSensor(device_path, MPU9250_MEASURE_INTERVAL_US, mag_enabled), // true = mag is enabled
 		_last_temp_c(0.0f),
-		_temp_initialized(false)
+		_temp_initialized(false),
+		_mag_enabled(mag_enabled)
 	{
 		m_id.dev_id_s.devtype = DRV_DF_DEVTYPE_MPU9250;
 		// TODO: does the WHOAMI make sense as an address?
@@ -99,8 +126,8 @@ private:
 
 	float _last_temp_c;
 	bool _temp_initialized;
-
-	friend class MPU9250_mag;
+	bool _mag_enabled;
+	MPU9250_mag *_mag;
 };
 
 }; // namespace DriverFramework

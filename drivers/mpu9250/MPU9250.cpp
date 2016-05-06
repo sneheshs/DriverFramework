@@ -36,6 +36,7 @@
 #include "math.h"
 #include "DriverFramework.hpp"
 #include "MPU9250.hpp"
+#include "MPU9250_mag.hpp"
 
 
 #define MPUREG_WHOAMI			0x75
@@ -282,6 +283,21 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
+	// Initialize the magnetometer inside the IMU, if enabled by the caller.
+	if (mag_enabled) {
+		if (mag == nullptr) {
+			if ((mag = new MPU9250_mag(*this, MPU9x50_COMPASS_SAMPLE_RATE_100HZ) == nullptr)) {
+				DF_LOG_ERR("Allocation of magnetometer object failed.");
+			}
+			// Initialize the magnetometer, providing the gyro sample rate for
+			// internal calculations.
+			result = _mag->initialize(8000); // 8000 = sample rate in Hz of the gyro
+			if (result != 0) {
+				DF_LOG_ERR("Magnetometer initialization failed");
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -422,21 +438,15 @@ void MPU9250::_measure()
 		return;
 	}
 
-#pragma pack(push, 1)
-	struct fifo_packet {
-		int16_t		accel_x;
-		int16_t		accel_y;
-		int16_t		accel_z;
-		int16_t		temp;
-		int16_t		gyro_x;
-		int16_t		gyro_y;
-		int16_t		gyro_z;
-		//uint8_t		ext_data[24];
-	};
-#pragma pack(pop)
+	int size_of_fifo_packet;
+	if (mag_enabled) {
+		size_of_fifo_packet = sizeof(fifo_packet_with_mag);
+	} else {
+		size_of_fifo_packet = sizeof(fifo_packet);
+	}
 
 	// Get FIFO byte count to read and floor it to the report size.
-	int bytes_to_read = get_fifo_count() / sizeof(fifo_packet) * sizeof(fifo_packet);
+	int	bytes_to_read = get_fifo_count() / size_of_fifo_packet * size_of_fifo_packet;
 
 	if (bytes_to_read < 0) {
 		m_synchronize.lock();
@@ -446,8 +456,8 @@ void MPU9250::_measure()
 	}
 
 	// The FIFO buffer on the MPU is 512 bytes according to the datasheet, so let's use
-	// 36*14 = 504.
-	const unsigned buf_len = 36 * sizeof(fifo_packet);
+	// 36*size_of_fifo_packet.
+	const unsigned buf_len = 36 * size_of_fifo_packet;
 	uint8_t fifo_read_buf[buf_len];
 
 	if (bytes_to_read <= 0) {
@@ -458,7 +468,6 @@ void MPU9250::_measure()
 	}
 
 	const unsigned read_len = MIN((unsigned)bytes_to_read, buf_len);
-
 	memset(fifo_read_buf, 0x0, buf_len);
 
 	// According to the protocol specs, all sensor and interrupt registers may be read at 20 MHz.
@@ -467,8 +476,7 @@ void MPU9250::_measure()
 	// - The buffer is off-by-one. So the report "starts" at &fifo_read_buf[i+1].
 	// - Also, the FIFO buffer seemed to prone to random corruption (or shifting), unless
 	//   all other sensors ran very smooth. (E.g. Changing the bus speed of the HMC5883 driver from
-	//   400 kHz to 100 kHz could cau
-	se corruption because this driver wouldn't run as regularly.
+	//   400 kHz to 100 kHz could cause corruption because this driver wouldn't run as regularly.
 	//
 	// Luckily 10 MHz seems to work fine.
 
@@ -482,9 +490,9 @@ void MPU9250::_measure()
 		return;
 	}
 
-	for (unsigned i = 0; i < read_len / sizeof(fifo_packet); ++i) {
+	for (unsigned i = 0; i < read_len / size_of_fifo_packet; ++i) {
 
-		fifo_packet *report = (fifo_packet *)(&fifo_read_buf[i * sizeof(fifo_packet)]);
+		fifo_packet *report = (fifo_packet *)(&fifo_read_buf[i * size_of_fifo_packet]);
 
 		/* TODO: add ifdef for endianness */
 		report->accel_x = swap16(report->accel_x);
@@ -494,6 +502,11 @@ void MPU9250::_measure()
 		report->gyro_x = swap16(report->gyro_x);
 		report->gyro_y = swap16(report->gyro_y);
 		report->gyro_z = swap16(report->gyro_z);
+
+		// TODO-JYW: LEFT-OFF:  Call the process function for the mag data...
+		if (_mag_enabled) {
+			_mag->process((fifo_packet_with_mag *)report);
+		}
 
 		// Check if the full accel range of the accel has been used. If this occurs, it is
 		// either a spike due to a crash/landing or a sign that the vibrations levels
@@ -555,11 +568,17 @@ void MPU9250::_measure()
 		m_sensor_data.gyro_rad_s_y = float(report->gyro_y) * GYRO_RAW_TO_RAD_S;
 		m_sensor_data.gyro_rad_s_z = float(report->gyro_z) * GYRO_RAW_TO_RAD_S;
 
+		if (_mag_enabled) {
+			m_sensor_data.mag_ga_x = float(report->mag_x);
+			m_sensor_data.mag_ga_x = float(report->mag_x);
+			m_sensor_data.mag_ga_z = float(report->mag_z);
+		}
+
 		++m_sensor_data.read_counter;
 
 		// A FIFO sample is created at 8kHz, which means the interval between samples is 125 us.
 		// The last read FIFO sample at i+1 has an offset of 0.
-		m_sensor_data.time_offset_us = -((read_len / sizeof(fifo_packet)) - (i + 1)) * 125;
+		m_sensor_data.time_offset_us = -((read_len / size_of_fifo_packet) - (i + 1)) * 125;
 
 		_publish(m_sensor_data);
 
