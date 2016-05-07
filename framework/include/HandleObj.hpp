@@ -67,7 +67,7 @@ public:
 	}
 
 protected:
-	friend DevMgr;
+	friend class DevMgr;
 
 #ifdef __DF_NUTTX
 	int 	m_fd = -1;
@@ -95,8 +95,8 @@ public:
 	}
 
 protected:
-	friend HRTWorkQueue;
-	friend WorkMgr;
+	friend class HRTWorkQueue;
+	friend class WorkMgr;
 
 	int	m_handle = -1;
 	int 	m_errno = 0;

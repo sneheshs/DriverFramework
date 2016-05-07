@@ -156,8 +156,6 @@
 
 #define MIN(_x, _y) (_x) > (_y) ? (_y) : (_x)
 
-
-
 using namespace DriverFramework;
 
 int MPU9250::mpu9250_init()
@@ -283,17 +281,23 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
+	// TODO-JYW: TESTING-TESTING
+	_mag_enabled = true;
+	// TODO-JYW: TESTING-TESTING
+
 	// Initialize the magnetometer inside the IMU, if enabled by the caller.
-	if (mag_enabled) {
-		if (mag == nullptr) {
-			if ((mag = new MPU9250_mag(*this, MPU9x50_COMPASS_SAMPLE_RATE_100HZ) == nullptr)) {
+	if (_mag_enabled) {
+		if (_mag == nullptr) {
+			DF_LOG_INFO("Instantiating MPU9250_mag class.");
+			if ((_mag = new MPU9250_mag(*this, MPU9x50_COMPASS_SAMPLE_RATE_100HZ)) != nullptr) {
+				// Initialize the magnetometer, providing the gyro sample rate for
+				// internal calculations.
+				result = _mag->initialize(8000); // 8000 = sample rate in Hz of the gyro
+				if (result != 0) {
+					DF_LOG_ERR("Magnetometer initialization failed");
+				}
+			} else {
 				DF_LOG_ERR("Allocation of magnetometer object failed.");
-			}
-			// Initialize the magnetometer, providing the gyro sample rate for
-			// internal calculations.
-			result = _mag->initialize(8000); // 8000 = sample rate in Hz of the gyro
-			if (result != 0) {
-				DF_LOG_ERR("Magnetometer initialization failed");
 			}
 		}
 	}
@@ -439,7 +443,7 @@ void MPU9250::_measure()
 	}
 
 	int size_of_fifo_packet;
-	if (mag_enabled) {
+	if (_mag_enabled) {
 		size_of_fifo_packet = sizeof(fifo_packet_with_mag);
 	} else {
 		size_of_fifo_packet = sizeof(fifo_packet);
@@ -530,6 +534,25 @@ void MPU9250::_measure()
 
 		const float temp_c = float(report->temp) / 361.0f + 35.0f;
 
+
+		// TODO-JYW: TESTING-TESTING
+//		fifo_packet_with_mag *report_with_mag_output = (fifo_packet_with_mag *)report;
+//		DF_LOG_INFO("IMU: accel: [%d, %d, %d]",
+//				report->accel_x,
+//				report->accel_y,
+//				report->accel_z);
+//		DF_LOG_INFO("     gyro:  [%d, %d, %d]",
+//				report->gyro_x,
+//				report->gyro_y,
+//				report->gyro_z);
+//		DF_LOG_INFO("     mag:  [%d, %d, %d] ga",
+//				report_with_mag_output->mag_x,
+//				report_with_mag_output->mag_y,
+//				report_with_mag_output->mag_z);
+//		DF_LOG_INFO("    temp:  %d C",
+//				report_with_mag_output->temp);
+		// TODO-JYW: TESTING-TESTING
+
 		// Use the temperature field to try to detect if we (ever) fall out of sync with
 		// the FIFO buffer. If the temperature changes insane amounts, reset the FIFO logic
 		// and return early.
@@ -547,7 +570,7 @@ void MPU9250::_measure()
 			// Once initialized, check for a temperature change of more than 2 degrees which
 			// points to a FIFO corruption.
 			if (fabs(temp_c - _last_temp_c) > 2.0f) {
-				DF_LOG_ERR("FIFO corrupt");
+				DF_LOG_ERR("FIFO corrupt, temp difference: %f", fabs(temp_c - _last_temp_c));
 				reset_fifo();
 				m_synchronize.lock();
 				++m_sensor_data.fifo_corruption_counter;
@@ -558,7 +581,14 @@ void MPU9250::_measure()
 			_last_temp_c = temp_c;
 		}
 
+		// TODO-JYW: LEFT-OFF:
+		// The FIFO is repeatedly getting corrupted.  Verify that the data appears valid
+		// when it is not corrupted.  Also, change the MPU configuration to match that which
+		// we are using in the legacy driver, particularly the setting which prevents
+		// writing into the FIFO if it is already full.
+
 		m_synchronize.lock();
+		DF_LOG_INFO("read valid data");
 
 		m_sensor_data.accel_m_s2_x = float(report->accel_x) * (MPU9250_ONE_G / 2048.0f);
 		m_sensor_data.accel_m_s2_y = float(report->accel_y) * (MPU9250_ONE_G / 2048.0f);
@@ -569,9 +599,10 @@ void MPU9250::_measure()
 		m_sensor_data.gyro_rad_s_z = float(report->gyro_z) * GYRO_RAW_TO_RAD_S;
 
 		if (_mag_enabled) {
-			m_sensor_data.mag_ga_x = float(report->mag_x);
-			m_sensor_data.mag_ga_x = float(report->mag_x);
-			m_sensor_data.mag_ga_z = float(report->mag_z);
+			fifo_packet_with_mag *report_with_mag = (fifo_packet_with_mag *)report;
+			m_sensor_data.mag_ga_x = float(report_with_mag->mag_x);
+			m_sensor_data.mag_ga_x = float(report_with_mag->mag_x);
+			m_sensor_data.mag_ga_z = float(report_with_mag->mag_z);
 		}
 
 		++m_sensor_data.read_counter;
