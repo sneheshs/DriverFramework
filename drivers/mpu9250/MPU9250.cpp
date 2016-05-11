@@ -243,9 +243,14 @@ int MPU9250::mpu9250_init()
 
 	//usleep(1000);
 
+// TODO-JYW: TESTING-TESTING
+//	result = _writeReg(MPUREG_CONFIG,
+//			   BITS_DLPF_CFG_250HZ |
+//			   BITS_CONFIG_FIFO_MODE_OVERWRITE);
 	result = _writeReg(MPUREG_CONFIG,
 			   BITS_DLPF_CFG_250HZ |
-			   BITS_CONFIG_FIFO_MODE_OVERWRITE);
+   			   BITS_CONFIG_FIFO_MODE_STOP);
+// TODO-JYW: TESTING-TESTING
 
 	if (result != 0) {
 		DF_LOG_ERR("config failed");
