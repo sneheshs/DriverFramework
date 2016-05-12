@@ -90,7 +90,7 @@ public:
 	int detect(void);
 
 	/// @return 0 on success, -errno on failure
-	int write_reg_verified(int reg, uint8_t val, uint8_t mask);
+	int write_imu_reg_verified(int reg, uint8_t val, uint8_t mask);
 
 	/// @return 0 on success, -errno on failure
 	int read_reg(uint8_t reg, uint8_t *val);

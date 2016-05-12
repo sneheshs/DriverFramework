@@ -111,6 +111,10 @@
 #define BITS_CONFIG_FIFO_MODE_OVERWRITE	0x00
 #define BITS_CONFIG_FIFO_MODE_STOP	0x40
 
+#define BIT_FIFO_SIZE_1024  (0x40)
+#define BIT_FIFO_SIZE_2048  (0x80)
+#define BIT_FIFO_SIZE_4096  (0xC0)
+
 #define BITS_GYRO_ST_X			0x80
 #define BITS_GYRO_ST_Y			0x40
 #define BITS_GYRO_ST_Z			0x20
@@ -139,6 +143,9 @@
 #define BITS_FIFO_ENABLE_GYRO_YOUT	0x20
 #define BITS_FIFO_ENABLE_GYRO_ZOUT	0x10
 #define BITS_FIFO_ENABLE_ACCEL		0x08
+#define BITS_FIFO_ENABLE_SLV2		0x04
+#define BITS_FIFO_ENABLE_SLV1		0x02
+#define BITS_FIFO_ENABLE_SLV0		0x01
 
 #define BITS_ACCEL_CONFIG_16G		0x18
 
@@ -160,6 +167,10 @@ using namespace DriverFramework;
 
 int MPU9250::mpu9250_init()
 {
+	// TODO-JYW: TESTING-TESTING
+	_mag_enabled = true;
+	// TODO-JYW: TESTING-TESTING
+
 	/* Zero the struct */
 	m_synchronize.lock();
 
@@ -185,21 +196,31 @@ int MPU9250::mpu9250_init()
 
 	m_synchronize.unlock();
 
+	// TODO-JYW: TESTING-TESTING
+//	int result = _writeReg(MPUREG_PWR_MGMT_1,
+//			       BIT_H_RESET |
+//			       MPU_CLK_SEL_AUTO);
 	int result = _writeReg(MPUREG_PWR_MGMT_1,
-			       BIT_H_RESET |
-			       MPU_CLK_SEL_AUTO);
+				   BIT_H_RESET);
 
 	if (result != 0) {
 		DF_LOG_ERR("reset failed");
 	}
+    usleep(100000);
+    DF_LOG_INFO("Reset MPU9250");
 
-	usleep(1000);
-
-	result = _writeReg(MPUREG_PWR_MGMT_2, 0);
-
+	result = _writeReg(MPUREG_PWR_MGMT_1,
+    			       0);
 	if (result != 0) {
-		DF_LOG_ERR("clock selection failed");
+		DF_LOG_ERR("wakeup sensor failed");
 	}
+
+// TODO-JYW: TESTING-TESTING
+//	result = _writeReg(MPUREG_PWR_MGMT_2, 0);
+//
+//	if (result != 0) {
+//		DF_LOG_ERR("clock selection failed");
+//	}
 
 	usleep(1000);
 
@@ -213,12 +234,22 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
-	result = _writeReg(MPUREG_FIFO_EN,
-			   BITS_FIFO_ENABLE_TEMP_OUT |
-			   BITS_FIFO_ENABLE_GYRO_XOUT |
-			   BITS_FIFO_ENABLE_GYRO_YOUT |
-			   BITS_FIFO_ENABLE_GYRO_ZOUT |
-			   BITS_FIFO_ENABLE_ACCEL);
+	if (_mag_enabled) {
+		result = _writeReg(MPUREG_FIFO_EN,
+				   BITS_FIFO_ENABLE_TEMP_OUT |
+				   BITS_FIFO_ENABLE_GYRO_XOUT |
+				   BITS_FIFO_ENABLE_GYRO_YOUT |
+				   BITS_FIFO_ENABLE_GYRO_ZOUT |
+				   BITS_FIFO_ENABLE_ACCEL |
+				   BITS_FIFO_ENABLE_SLV0);  // SLV0 is configured for bulk transfer of mag data over I2C
+	} else {
+		result = _writeReg(MPUREG_FIFO_EN,
+				   BITS_FIFO_ENABLE_TEMP_OUT |
+				   BITS_FIFO_ENABLE_GYRO_XOUT |
+				   BITS_FIFO_ENABLE_GYRO_YOUT |
+				   BITS_FIFO_ENABLE_GYRO_ZOUT |
+				   BITS_FIFO_ENABLE_ACCEL);
+	}
 
 	if (result != 0) {
 		DF_LOG_ERR("FIFO enable failed");
@@ -287,8 +318,14 @@ int MPU9250::mpu9250_init()
 	usleep(1000);
 
 	// TODO-JYW: TESTING-TESTING
-	_mag_enabled = true;
-	// TODO-JYW: TESTING-TESTING
+//	result = _writeReg(MPUREG_ACCEL_CONFIG2,
+//			BIT_FIFO_SIZE_4096);
+//
+//	if (result != 0) {
+//		DF_LOG_ERR("FIFO configuration failed");
+//	}
+
+//	usleep(1000);
 
 	// Initialize the magnetometer inside the IMU, if enabled by the caller.
 	if (_mag_enabled) {
@@ -464,6 +501,9 @@ void MPU9250::_measure()
 		return;
 	}
 
+	// TODO-JYW: TESTING-TESTING: Is this statement correct?  The FIFO should be
+	// configurable.
+	//
 	// The FIFO buffer on the MPU is 512 bytes according to the datasheet, so let's use
 	// 36*size_of_fifo_packet.
 	const unsigned buf_len = 36 * size_of_fifo_packet;
@@ -490,6 +530,8 @@ void MPU9250::_measure()
 	// Luckily 10 MHz seems to work fine.
 
 	_setBusFrequency(SPI_FREQUENCY_10MHZ);
+//	DF_LOG_INFO("bulk read at: 0x%X, len: %d, size of packet: %d", fifo_read_buf, read_len,
+//			size_of_fifo_packet);
 	result = _bulkRead(MPUREG_FIFO_R_W, fifo_read_buf, read_len);
 
 	if (result != 0) {
@@ -504,6 +546,7 @@ void MPU9250::_measure()
 		fifo_packet *report = (fifo_packet *)(&fifo_read_buf[i * size_of_fifo_packet]);
 
 		/* TODO: add ifdef for endianness */
+		// TODO-JYW: Let the sensor do the byte swapping.
 		report->accel_x = swap16(report->accel_x);
 		report->accel_y = swap16(report->accel_y);
 		report->accel_z = swap16(report->accel_z);
@@ -539,25 +582,6 @@ void MPU9250::_measure()
 
 		const float temp_c = float(report->temp) / 361.0f + 35.0f;
 
-
-		// TODO-JYW: TESTING-TESTING
-//		fifo_packet_with_mag *report_with_mag_output = (fifo_packet_with_mag *)report;
-//		DF_LOG_INFO("IMU: accel: [%d, %d, %d]",
-//				report->accel_x,
-//				report->accel_y,
-//				report->accel_z);
-//		DF_LOG_INFO("     gyro:  [%d, %d, %d]",
-//				report->gyro_x,
-//				report->gyro_y,
-//				report->gyro_z);
-//		DF_LOG_INFO("     mag:  [%d, %d, %d] ga",
-//				report_with_mag_output->mag_x,
-//				report_with_mag_output->mag_y,
-//				report_with_mag_output->mag_z);
-//		DF_LOG_INFO("    temp:  %d C",
-//				report_with_mag_output->temp);
-		// TODO-JYW: TESTING-TESTING
-
 		// Use the temperature field to try to detect if we (ever) fall out of sync with
 		// the FIFO buffer. If the temperature changes insane amounts, reset the FIFO logic
 		// and return early.
@@ -568,19 +592,25 @@ void MPU9250::_measure()
 
 				// Initialize the temperature logic.
 				_last_temp_c = temp_c;
+				DF_LOG_INFO("IMU temperature initialized to: %f", temp_c);
 				_temp_initialized = true;
 			}
 
 		} else {
+			// TODO-JYW: TESTING-TESTING
 			// Once initialized, check for a temperature change of more than 2 degrees which
 			// points to a FIFO corruption.
 			if (fabs(temp_c - _last_temp_c) > 2.0f) {
-				DF_LOG_ERR("FIFO corrupt, temp difference: %f", fabs(temp_c - _last_temp_c));
+				DF_LOG_ERR("FIFO corrupt, temp difference: %f, last temp: %f, current temp: %f",
+						fabs(temp_c - _last_temp_c), (double)_last_temp_c, (double)temp_c);
 				reset_fifo();
+				_temp_initialized = false;
 				m_synchronize.lock();
 				++m_sensor_data.fifo_corruption_counter;
 				m_synchronize.unlock();
-				return;
+
+				// TODO-JYW: TESTING-TESTING
+				// return;
 			}
 
 			_last_temp_c = temp_c;
@@ -593,7 +623,7 @@ void MPU9250::_measure()
 		// writing into the FIFO if it is already full.
 
 		m_synchronize.lock();
-		DF_LOG_INFO("read valid data");
+//		DF_LOG_INFO("read valid data");
 
 		m_sensor_data.accel_m_s2_x = float(report->accel_x) * (MPU9250_ONE_G / 2048.0f);
 		m_sensor_data.accel_m_s2_y = float(report->accel_y) * (MPU9250_ONE_G / 2048.0f);
@@ -606,9 +636,27 @@ void MPU9250::_measure()
 		if (_mag_enabled) {
 			fifo_packet_with_mag *report_with_mag = (fifo_packet_with_mag *)report;
 			m_sensor_data.mag_ga_x = float(report_with_mag->mag_x);
-			m_sensor_data.mag_ga_x = float(report_with_mag->mag_x);
+			m_sensor_data.mag_ga_y = float(report_with_mag->mag_y);
 			m_sensor_data.mag_ga_z = float(report_with_mag->mag_z);
 		}
+
+
+		// TODO-JYW: TESTING-TESTING
+//		DF_LOG_INFO("IMU: accel: [%f, %f, %f]",
+//				(double)m_sensor_data.accel_m_s2_x,
+//				(double)m_sensor_data.accel_m_s2_y,
+//				(double)m_sensor_data.accel_m_s2_z);
+//		DF_LOG_INFO("     gyro:  [%f, %f, %f]",
+//				(double)m_sensor_data.gyro_rad_s_x,
+//				(double)m_sensor_data.gyro_rad_s_y,
+//				(double)m_sensor_data.gyro_rad_s_z);
+//		DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
+//				(double)m_sensor_data.mag_ga_x,
+//				(double)m_sensor_data.mag_ga_y,
+//				(double)m_sensor_data.mag_ga_z);
+//		DF_LOG_INFO("    temp:  %f C",
+//				(double)m_sensor_data.temp_c);
+		// TODO-JYW: TESTING-TESTING
 
 		++m_sensor_data.read_counter;
 
