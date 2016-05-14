@@ -650,10 +650,10 @@ void MPU9250::_measure()
 //				(double)m_sensor_data.gyro_rad_s_x,
 //				(double)m_sensor_data.gyro_rad_s_y,
 //				(double)m_sensor_data.gyro_rad_s_z);
-//		DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
-//				(double)m_sensor_data.mag_ga_x,
-//				(double)m_sensor_data.mag_ga_y,
-//				(double)m_sensor_data.mag_ga_z);
+		DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
+				(double)m_sensor_data.mag_ga_x,
+				(double)m_sensor_data.mag_ga_y,
+				(double)m_sensor_data.mag_ga_z);
 //		DF_LOG_INFO("    temp:  %f C",
 //				(double)m_sensor_data.temp_c);
 		// TODO-JYW: TESTING-TESTING
