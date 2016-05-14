@@ -147,6 +147,7 @@ if (ret < 0) {
 To run the unit tests build it and run the test app:
 
 ```
+git submodule update --init --recursive
 make
 build_linux/test/df_testapp
 ```
