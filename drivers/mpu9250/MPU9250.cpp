@@ -167,6 +167,9 @@ using namespace DriverFramework;
 
 int MPU9250::mpu9250_init()
 {
+	// Use 1 MHz for normal registers.
+	_setBusFrequency(SPI_FREQUENCY_1MHZ);
+
 	// TODO-JYW: TESTING-TESTING
 	_mag_enabled = true;
 	// TODO-JYW: TESTING-TESTING
@@ -274,14 +277,9 @@ int MPU9250::mpu9250_init()
 
 	//usleep(1000);
 
-// TODO-JYW: TESTING-TESTING
-//	result = _writeReg(MPUREG_CONFIG,
-//			   BITS_DLPF_CFG_250HZ |
-//			   BITS_CONFIG_FIFO_MODE_OVERWRITE);
 	result = _writeReg(MPUREG_CONFIG,
 			   BITS_DLPF_CFG_250HZ |
-   			   BITS_CONFIG_FIFO_MODE_STOP);
-// TODO-JYW: TESTING-TESTING
+			   BITS_CONFIG_FIFO_MODE_OVERWRITE);
 
 	if (result != 0) {
 		DF_LOG_ERR("config failed");
@@ -338,6 +336,8 @@ int MPU9250::mpu9250_init()
 				if (result != 0) {
 					DF_LOG_ERR("Magnetometer initialization failed");
 				}
+				// Reset the FIFO since the mag configuration add more data to the FIFO.
+				reset_fifo();
 			} else {
 				DF_LOG_ERR("Allocation of magnetometer object failed.");
 			}
@@ -461,6 +461,9 @@ void MPU9250::reset_fifo()
 
 void MPU9250::_measure()
 {
+	// TODO-JYW: TESTING-TESTING
+	usleep(1000);
+
 	// Use 1 MHz for normal registers.
 	_setBusFrequency(SPI_FREQUENCY_1MHZ);
 	uint8_t int_status = 0;
@@ -556,8 +559,9 @@ void MPU9250::_measure()
 		report->gyro_z = swap16(report->gyro_z);
 
 		// TODO-JYW: LEFT-OFF:  Call the process function for the mag data...
+		int mag_error;
 		if (_mag_enabled) {
-			_mag->process((fifo_packet_with_mag *)report);
+			mag_error = _mag->process((fifo_packet_with_mag *)report);
 		}
 
 		// Check if the full accel range of the accel has been used. If this occurs, it is
@@ -633,32 +637,43 @@ void MPU9250::_measure()
 		m_sensor_data.gyro_rad_s_y = float(report->gyro_y) * GYRO_RAW_TO_RAD_S;
 		m_sensor_data.gyro_rad_s_z = float(report->gyro_z) * GYRO_RAW_TO_RAD_S;
 
-		if (_mag_enabled) {
+		// TODO-JYW: Replace the number with a constant.
+		// The only error of significance is the mag overflow which can corrupt the sample.
+		// A data not ready error can be ignored to allow the previous sample from the sensor
+		// to be used.
+		if (_mag_enabled && mag_error == 0) {
 			fifo_packet_with_mag *report_with_mag = (fifo_packet_with_mag *)report;
 			m_sensor_data.mag_ga_x = float(report_with_mag->mag_x);
 			m_sensor_data.mag_ga_y = float(report_with_mag->mag_y);
 			m_sensor_data.mag_ga_z = float(report_with_mag->mag_z);
 		}
 
-
-		// TODO-JYW: TESTING-TESTING
-//		DF_LOG_INFO("IMU: accel: [%f, %f, %f]",
-//				(double)m_sensor_data.accel_m_s2_x,
-//				(double)m_sensor_data.accel_m_s2_y,
-//				(double)m_sensor_data.accel_m_s2_z);
-//		DF_LOG_INFO("     gyro:  [%f, %f, %f]",
-//				(double)m_sensor_data.gyro_rad_s_x,
-//				(double)m_sensor_data.gyro_rad_s_y,
-//				(double)m_sensor_data.gyro_rad_s_z);
-		DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
-				(double)m_sensor_data.mag_ga_x,
-				(double)m_sensor_data.mag_ga_y,
-				(double)m_sensor_data.mag_ga_z);
-//		DF_LOG_INFO("    temp:  %f C",
-//				(double)m_sensor_data.temp_c);
-		// TODO-JYW: TESTING-TESTING
-
 		++m_sensor_data.read_counter;
+
+		// TODO-JYW: TESTING-TESTING
+		// Generate debug output every second, assuming that a sample is generated every
+		// 125 usecs.
+		if (++m_sensor_data.read_counter % (1000000 / 125) == 0)
+		{
+			DF_LOG_INFO("IMU: accel: [%f, %f, %f]",
+					(double)m_sensor_data.accel_m_s2_x,
+					(double)m_sensor_data.accel_m_s2_y,
+					(double)m_sensor_data.accel_m_s2_z);
+			DF_LOG_INFO("     gyro:  [%f, %f, %f]",
+					(double)m_sensor_data.gyro_rad_s_x,
+					(double)m_sensor_data.gyro_rad_s_y,
+					(double)m_sensor_data.gyro_rad_s_z);
+			DF_LOG_INFO("    temp:  %f C",
+					(double)m_sensor_data.temp_c);
+
+			if (_mag_enabled && mag_error == 0) {
+				DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
+						(double)m_sensor_data.mag_ga_x,
+						(double)m_sensor_data.mag_ga_y,
+						(double)m_sensor_data.mag_ga_z);
+			}
+		}
+		// TODO-JYW: TESTING-TESTING
 
 		// A FIFO sample is created at 8kHz, which means the interval between samples is 125 us.
 		// The last read FIFO sample at i+1 has an offset of 0.
