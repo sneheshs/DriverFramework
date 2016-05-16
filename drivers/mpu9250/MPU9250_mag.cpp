@@ -257,8 +257,8 @@ int MPU9250_mag::_convert_sample_rate_enum_to_hz(
 int MPU9250_mag::_initialize(int gyro_sample_rate_in_hz)
 {
 // TODO-JYW: TESTING-TESTING: Uncomment when complete.
-//	uint8_t i2c_mst_delay = 0;
-//	uint8_t i2c_mst_delay_ctrl = 0;
+	uint8_t i2c_mst_delay = 0;
+	uint8_t i2c_mst_delay_ctrl = 0;
 	uint8_t i2c_mst_ctrl = 0;
 	uint8_t user_ctrl = 0;
 	int result;
@@ -377,22 +377,22 @@ int MPU9250_mag::_initialize(int gyro_sample_rate_in_hz)
 
 	// Enable reading of the mag every n gyro samples, since the gyro is sampled
 	// at a higher rate.
-//	i2c_mst_delay = gyro_sample_rate_in_hz / _sample_rate_in_hz - 1;
+	i2c_mst_delay = gyro_sample_rate_in_hz / _sample_rate_in_hz - 1;
 	// TODO-JYW: TESTING-TESTING
 //	i2c_mst_delay = gyro_sample_rate_in_hz / 100;
 //	i2c_mst_delay = 31;
 //	i2c_mst_delay = 0;
-//	_imu.writeReg(MPU9250_REG_I2C_SLV4_CTRL, i2c_mst_delay);
-//	DF_LOG_INFO("Set I2C_SLV4_CTRL i2c_mst_dly = %u", i2c_mst_delay);
-//	usleep(10000);
+	_imu.writeReg(MPU9250_REG_I2C_SLV4_CTRL, i2c_mst_delay);
+	DF_LOG_INFO("Set I2C_SLV4_CTRL i2c_mst_dly = %u", i2c_mst_delay);
+	usleep(10000);
 
 	// Delay shadowing mag data until all of the data is received.
 //	i2c_mst_delay_ctrl |= BIT_DELAY_ES_SHADOW;
 	// Enable delayed I2C transfers for the mag on Slave 0 registers.
-//	i2c_mst_delay_ctrl |= BIT_SLV0_DLY_EN;
-//	_imu.writeReg(MPU9250_REG_I2C_MST_DELAY_CTRL, i2c_mst_delay_ctrl);
-//	DF_LOG_INFO("Enabled delayed access on I2C slave 0");
-//	usleep(10000);
+	i2c_mst_delay_ctrl |= BIT_SLV0_DLY_EN;
+	_imu.writeReg(MPU9250_REG_I2C_MST_DELAY_CTRL, i2c_mst_delay_ctrl);
+	DF_LOG_INFO("Enabled delayed access on I2C slave 0");
+	usleep(10000);
 
 	return 0;
 }

@@ -240,8 +240,8 @@ int MPU9250::mpu9250_init()
 		result = _writeReg(MPUREG_FIFO_EN,
 				BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
 						| BITS_FIFO_ENABLE_GYRO_YOUT
-						| BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL);
-//				   BITS_FIFO_ENABLE_SLV0);  // SLV0 is configured for bulk transfer of mag data over I2C
+						| BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL |
+				  		  BITS_FIFO_ENABLE_SLV0);  // SLV0 is configured for bulk transfer of mag data over I2C
 	} else {
 		result = _writeReg(MPUREG_FIFO_EN,
 				BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
@@ -663,14 +663,16 @@ void MPU9250::_measure()
 		// TODO-JYW: TESTING-TESTING
 
 		if (_mag_enabled) {
-			struct mag_data data = { 0 };
+			struct fifo_packet_with_mag *report_with_mag_data =
+					(struct fifo_packet_with_mag *)report;
+//			struct mag_data data = { 0 };
 //			int ret = _bulkRead(MPUREG_EXT_SENS_DATA_00, (uint8_t *)&data, 1);
-			int ret = _bulkRead(MPUREG_EXT_SENS_DATA_00, (uint8_t *)&data, sizeof(mag_data));
+//			int ret = _bulkRead(MPUREG_EXT_SENS_DATA_00, (uint8_t *)&data, sizeof(mag_data));
 //			_mag->read_reg(0x02, (uint8_t *)&data);
 //			readReg(MPUREG_EXT_SENS_DATA_00, (uint8_t &) data.mag_st1);
-			if (ret != 0) {
-				DF_LOG_ERR("error reading mag data from external sensor data registers");
-			}
+//			if (ret != 0) {
+//				DF_LOG_ERR("error reading mag data from external sensor data registers");
+//			}
 
 			// TODO-JYW: TESTING-TESTING: checking for data ready bit
 //			if (data.mag_st1 & 0x01) {
@@ -685,11 +687,13 @@ void MPU9250::_measure()
 
 //				_bulkRead(MPUREG_EXT_SENS_DATA_00 + 1, (uint8_t *)&data.mag_x, sizeof(data) - sizeof(data.mag_st1));
 //				writeReg(MPUREG_I2C_SLV1_CTRL, BITS_I2C_SLV1_DIS | 0x07);
-				int mag_error = _mag->process(data);
+				int mag_error = _mag->process((struct mag_data &)report_with_mag_data->mag_st1);
 				if (mag_error == 0) {
 					if ((m_sensor_data.read_counter % 10000) == 0) {
 						DF_LOG_INFO("     mag:  [%d, %d, %d] ga",
-								data.mag_x, data.mag_y, data.mag_z);
+								report_with_mag_data->mag_x,
+								report_with_mag_data->mag_y,
+								report_with_mag_data->mag_z);
 					}
 				}
 //			}
