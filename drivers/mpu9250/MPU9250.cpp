@@ -38,7 +38,6 @@
 #include "MPU9250.hpp"
 #include "MPU9250_mag.hpp"
 
-
 #define MPUREG_WHOAMI			0x75
 #define MPUREG_SMPLRT_DIV		0x19
 #define MPUREG_CONFIG			0x1A
@@ -99,7 +98,6 @@
 #define MPUREG_FIFO_COUNTL		0x73
 #define MPUREG_FIFO_R_W			0x74
 
-
 // Configuration bits MPU 9250
 #define BIT_SLEEP			0x40
 #define BIT_H_RESET			0x80
@@ -107,6 +105,7 @@
 
 #define BITS_USER_CTRL_FIFO_EN		0x40
 #define BITS_USER_CTRL_FIFO_RST		0x04
+#define BITS_USER_CTRL_I2C_MST_EN  	0x20
 
 #define BITS_CONFIG_FIFO_MODE_OVERWRITE	0x00
 #define BITS_CONFIG_FIFO_MODE_STOP	0x40
@@ -151,6 +150,9 @@
 
 // This is ACCEL_FCHOICE_B which is the inverse of ACCEL_FCHOICE
 #define BITS_ACCEL_CONFIG2_BW_1130HZ	0x08
+
+#define BITS_I2C_SLV1_EN     0x80
+#define BITS_I2C_SLV1_DIS    0x00
 
 #define BIT_RAW_RDY_EN			0x01
 #define BIT_INT_ANYRD_2CLEAR		0x10
@@ -203,17 +205,15 @@ int MPU9250::mpu9250_init()
 //	int result = _writeReg(MPUREG_PWR_MGMT_1,
 //			       BIT_H_RESET |
 //			       MPU_CLK_SEL_AUTO);
-	int result = _writeReg(MPUREG_PWR_MGMT_1,
-				   BIT_H_RESET);
+	int result = _writeReg(MPUREG_PWR_MGMT_1, BIT_H_RESET);
 
 	if (result != 0) {
 		DF_LOG_ERR("reset failed");
 	}
-    usleep(100000);
-    DF_LOG_INFO("Reset MPU9250");
+	usleep(100000);
+	DF_LOG_INFO("Reset MPU9250");
 
-	result = _writeReg(MPUREG_PWR_MGMT_1,
-    			       0);
+	result = _writeReg(MPUREG_PWR_MGMT_1, 0);
 	if (result != 0) {
 		DF_LOG_ERR("wakeup sensor failed");
 	}
@@ -228,8 +228,7 @@ int MPU9250::mpu9250_init()
 	usleep(1000);
 
 	result = _writeReg(MPUREG_USER_CTRL,
-			   BITS_USER_CTRL_FIFO_RST |
-			   BITS_USER_CTRL_FIFO_EN);
+			BITS_USER_CTRL_FIFO_RST | BITS_USER_CTRL_FIFO_EN);
 
 	if (result != 0) {
 		DF_LOG_ERR("User ctrl config failed");
@@ -239,19 +238,15 @@ int MPU9250::mpu9250_init()
 
 	if (_mag_enabled) {
 		result = _writeReg(MPUREG_FIFO_EN,
-				   BITS_FIFO_ENABLE_TEMP_OUT |
-				   BITS_FIFO_ENABLE_GYRO_XOUT |
-				   BITS_FIFO_ENABLE_GYRO_YOUT |
-				   BITS_FIFO_ENABLE_GYRO_ZOUT |
-				   BITS_FIFO_ENABLE_ACCEL |
-				   BITS_FIFO_ENABLE_SLV0);  // SLV0 is configured for bulk transfer of mag data over I2C
+				BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
+						| BITS_FIFO_ENABLE_GYRO_YOUT
+						| BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL);
+//				   BITS_FIFO_ENABLE_SLV0);  // SLV0 is configured for bulk transfer of mag data over I2C
 	} else {
 		result = _writeReg(MPUREG_FIFO_EN,
-				   BITS_FIFO_ENABLE_TEMP_OUT |
-				   BITS_FIFO_ENABLE_GYRO_XOUT |
-				   BITS_FIFO_ENABLE_GYRO_YOUT |
-				   BITS_FIFO_ENABLE_GYRO_ZOUT |
-				   BITS_FIFO_ENABLE_ACCEL);
+				BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
+						| BITS_FIFO_ENABLE_GYRO_YOUT
+						| BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL);
 	}
 
 	if (result != 0) {
@@ -270,16 +265,12 @@ int MPU9250::mpu9250_init()
 	 */
 	//uint8_t samplerate_divider = 0;
 	//result = _writeReg(MPUREG_FIFO_EN, samplerate_divider);
-
 	//if (result != 0) {
 	//	DF_LOG_ERR("sample rate config failed");
 	//}
-
 	//usleep(1000);
-
 	result = _writeReg(MPUREG_CONFIG,
-			   BITS_DLPF_CFG_250HZ |
-			   BITS_CONFIG_FIFO_MODE_OVERWRITE);
+			BITS_DLPF_CFG_250HZ | BITS_CONFIG_FIFO_MODE_OVERWRITE);
 
 	if (result != 0) {
 		DF_LOG_ERR("config failed");
@@ -287,9 +278,7 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
-	result = _writeReg(MPUREG_GYRO_CONFIG,
-			   BITS_FS_2000DPS |
-			   BITS_BW_LT3600HZ);
+	result = _writeReg(MPUREG_GYRO_CONFIG, BITS_FS_2000DPS | BITS_BW_LT3600HZ);
 
 	if (result != 0) {
 		DF_LOG_ERR("Gyro scale config failed");
@@ -297,8 +286,7 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
-	result = _writeReg(MPUREG_ACCEL_CONFIG,
-			   BITS_ACCEL_CONFIG_16G);
+	result = _writeReg(MPUREG_ACCEL_CONFIG, BITS_ACCEL_CONFIG_16G);
 
 	if (result != 0) {
 		DF_LOG_ERR("Accel scale config failed");
@@ -306,8 +294,7 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
-	result = _writeReg(MPUREG_ACCEL_CONFIG2,
-			   BITS_ACCEL_CONFIG2_BW_1130HZ);
+	result = _writeReg(MPUREG_ACCEL_CONFIG2, BITS_ACCEL_CONFIG2_BW_1130HZ);
 
 	if (result != 0) {
 		DF_LOG_ERR("Accel scale config2 failed");
@@ -329,7 +316,8 @@ int MPU9250::mpu9250_init()
 	if (_mag_enabled) {
 		if (_mag == nullptr) {
 			DF_LOG_INFO("Instantiating MPU9250_mag class.");
-			if ((_mag = new MPU9250_mag(*this, MPU9x50_COMPASS_SAMPLE_RATE_100HZ)) != nullptr) {
+			if ((_mag = new MPU9250_mag(*this,
+					MPU9x50_COMPASS_SAMPLE_RATE_100HZ)) != nullptr) {
 				// Initialize the magnetometer, providing the gyro sample rate for
 				// internal calculations.
 				result = _mag->initialize(8000); // 8000 = sample rate in Hz of the gyro
@@ -377,7 +365,8 @@ int MPU9250::start()
 	}
 
 	if (sensor_id != MPU_WHOAMI_9250) {
-		DF_LOG_ERR("MPU9250 sensor WHOAMI wrong: 0x%X, should be: 0x%X", sensor_id, MPU_WHOAMI_9250);
+		DF_LOG_ERR("MPU9250 sensor WHOAMI wrong: 0x%X, should be: 0x%X",
+				sensor_id, MPU_WHOAMI_9250);
 		result = -1;
 		goto exit;
 	}
@@ -385,7 +374,8 @@ int MPU9250::start()
 	result = mpu9250_init();
 
 	if (result != 0) {
-		DF_LOG_ERR("error: IMU sensor initialization failed, sensor read thread not started");
+		DF_LOG_ERR(
+				"error: IMU sensor initialization failed, sensor read thread not started");
 		goto exit;
 	}
 
@@ -396,8 +386,7 @@ int MPU9250::start()
 		return result;
 	}
 
-
-exit:
+	exit:
 
 	if (result != 0) {
 		devClose();
@@ -431,7 +420,8 @@ int MPU9250::get_fifo_count()
 
 	// Use 1 MHz for normal registers.
 	_setBusFrequency(SPI_FREQUENCY_1MHZ);
-	int ret = _bulkRead(MPUREG_FIFO_COUNTH, (uint8_t *)&num_bytes, sizeof(num_bytes));
+	int ret = _bulkRead(MPUREG_FIFO_COUNTH, (uint8_t *) &num_bytes,
+			sizeof(num_bytes));
 
 	if (ret == 0) {
 
@@ -451,8 +441,8 @@ void MPU9250::reset_fifo()
 	// Use 1 MHz for normal registers.
 	_setBusFrequency(SPI_FREQUENCY_1MHZ);
 	int result = _writeReg(MPUREG_USER_CTRL,
-			       BITS_USER_CTRL_FIFO_RST |
-			       BITS_USER_CTRL_FIFO_EN);
+			BITS_USER_CTRL_FIFO_RST | BITS_USER_CTRL_FIFO_EN
+					| BITS_USER_CTRL_I2C_MST_EN);
 
 	if (result != 0) {
 		DF_LOG_ERR("FIFO reset failed");
@@ -462,7 +452,7 @@ void MPU9250::reset_fifo()
 void MPU9250::_measure()
 {
 	// TODO-JYW: TESTING-TESTING
-	usleep(1000);
+//	usleep(1000);
 
 	// Use 1 MHz for normal registers.
 	_setBusFrequency(SPI_FREQUENCY_1MHZ);
@@ -477,11 +467,12 @@ void MPU9250::_measure()
 	}
 
 	if (int_status & BITS_INT_STATUS_FIFO_OVERFLOW) {
-		DF_LOG_ERR("overflow");
 		reset_fifo();
 
 		m_synchronize.lock();
-		++m_sensor_data.fifo_overflow_counter;
+		if ((++m_sensor_data.fifo_overflow_counter % 1000) == 0) {
+			DF_LOG_ERR("FIFO overflow");
+		}
 		m_synchronize.unlock();
 
 		return;
@@ -495,7 +486,8 @@ void MPU9250::_measure()
 	}
 
 	// Get FIFO byte count to read and floor it to the report size.
-	int	bytes_to_read = get_fifo_count() / size_of_fifo_packet * size_of_fifo_packet;
+	int bytes_to_read = get_fifo_count() / size_of_fifo_packet
+			* size_of_fifo_packet;
 
 	if (bytes_to_read < 0) {
 		m_synchronize.lock();
@@ -546,7 +538,8 @@ void MPU9250::_measure()
 
 	for (unsigned i = 0; i < read_len / size_of_fifo_packet; ++i) {
 
-		fifo_packet *report = (fifo_packet *)(&fifo_read_buf[i * size_of_fifo_packet]);
+		fifo_packet *report = (fifo_packet *) (&fifo_read_buf[i
+				* size_of_fifo_packet]);
 
 		/* TODO: add ifdef for endianness */
 		// TODO-JYW: Let the sensor do the byte swapping.
@@ -558,27 +551,21 @@ void MPU9250::_measure()
 		report->gyro_y = swap16(report->gyro_y);
 		report->gyro_z = swap16(report->gyro_z);
 
-		// TODO-JYW: LEFT-OFF:  Call the process function for the mag data...
-		int mag_error;
-		if (_mag_enabled) {
-			mag_error = _mag->process((fifo_packet_with_mag *)report);
-		}
-
 		// Check if the full accel range of the accel has been used. If this occurs, it is
 		// either a spike due to a crash/landing or a sign that the vibrations levels
 		// measured are excessive.
-		if (report->accel_x == INT16_MIN || report->accel_x == INT16_MAX ||
-		    report->accel_y == INT16_MIN || report->accel_y == INT16_MAX ||
-		    report->accel_z == INT16_MIN || report->accel_z == INT16_MAX) {
+		if (report->accel_x == INT16_MIN || report->accel_x == INT16_MAX
+				|| report->accel_y == INT16_MIN || report->accel_y == INT16_MAX
+				|| report->accel_z == INT16_MIN || report->accel_z == INT16_MAX) {
 			m_synchronize.lock();
 			++m_sensor_data.accel_range_hit_counter;
 			m_synchronize.unlock();
 		}
 
 		// Also check the full gyro range, however, this is very unlikely to happen.
-		if (report->gyro_x == INT16_MIN || report->gyro_x == INT16_MAX ||
-		    report->gyro_y == INT16_MIN || report->gyro_y == INT16_MAX ||
-		    report->gyro_z == INT16_MIN || report->gyro_z == INT16_MAX) {
+		if (report->gyro_x == INT16_MIN || report->gyro_x == INT16_MAX
+				|| report->gyro_y == INT16_MIN || report->gyro_y == INT16_MAX
+				|| report->gyro_z == INT16_MIN || report->gyro_z == INT16_MAX) {
 			m_synchronize.lock();
 			++m_sensor_data.gyro_range_hit_counter;
 			m_synchronize.unlock();
@@ -599,23 +586,26 @@ void MPU9250::_measure()
 				DF_LOG_INFO("IMU temperature initialized to: %f", temp_c);
 				_temp_initialized = true;
 			}
-
 		} else {
 			// TODO-JYW: TESTING-TESTING
 			// Once initialized, check for a temperature change of more than 2 degrees which
 			// points to a FIFO corruption.
 			if (fabs(temp_c - _last_temp_c) > 2.0f) {
-				DF_LOG_ERR("FIFO corrupt, temp difference: %f, last temp: %f, current temp: %f",
+				DF_LOG_ERR(
+						"FIFO corrupt, temp difference: %f, last temp: %f, current temp: %f",
 						fabs(temp_c - _last_temp_c), (double)_last_temp_c, (double)temp_c);
 				reset_fifo();
 				_temp_initialized = false;
 				m_synchronize.lock();
 				++m_sensor_data.fifo_corruption_counter;
 				m_synchronize.unlock();
-
-				// TODO-JYW: TESTING-TESTING
-				// return;
+				return;
 			}
+
+			// A FIFO sample is created at 8kHz, which means the interval between samples is 125 us.
+			// The last read FIFO sample at i+1 has an offset of 0.
+			m_sensor_data.time_offset_us = -((read_len / size_of_fifo_packet)
+					- (i + 1)) * 125;
 
 			_last_temp_c = temp_c;
 		}
@@ -629,9 +619,12 @@ void MPU9250::_measure()
 		m_synchronize.lock();
 //		DF_LOG_INFO("read valid data");
 
-		m_sensor_data.accel_m_s2_x = float(report->accel_x) * (MPU9250_ONE_G / 2048.0f);
-		m_sensor_data.accel_m_s2_y = float(report->accel_y) * (MPU9250_ONE_G / 2048.0f);
-		m_sensor_data.accel_m_s2_z = float(report->accel_z) * (MPU9250_ONE_G / 2048.0f);
+		m_sensor_data.accel_m_s2_x = float(report->accel_x)
+				* (MPU9250_ONE_G / 2048.0f);
+		m_sensor_data.accel_m_s2_y = float(report->accel_y)
+				* (MPU9250_ONE_G / 2048.0f);
+		m_sensor_data.accel_m_s2_z = float(report->accel_z)
+				* (MPU9250_ONE_G / 2048.0f);
 		m_sensor_data.temp_c = temp_c;
 		m_sensor_data.gyro_rad_s_x = float(report->gyro_x) * GYRO_RAW_TO_RAD_S;
 		m_sensor_data.gyro_rad_s_y = float(report->gyro_y) * GYRO_RAW_TO_RAD_S;
@@ -641,43 +634,66 @@ void MPU9250::_measure()
 		// The only error of significance is the mag overflow which can corrupt the sample.
 		// A data not ready error can be ignored to allow the previous sample from the sensor
 		// to be used.
-		if (_mag_enabled && mag_error == 0) {
-			fifo_packet_with_mag *report_with_mag = (fifo_packet_with_mag *)report;
-			m_sensor_data.mag_ga_x = float(report_with_mag->mag_x);
-			m_sensor_data.mag_ga_y = float(report_with_mag->mag_y);
-			m_sensor_data.mag_ga_z = float(report_with_mag->mag_z);
-		}
+//		if (_mag_enabled && mag_error == 0) {
+//			fifo_packet_with_mag *report_with_mag = (fifo_packet_with_mag *)report;
+//			m_sensor_data.mag_ga_x = float(report_with_mag->mag_x);
+//			m_sensor_data.mag_ga_y = float(report_with_mag->mag_y);
+//			m_sensor_data.mag_ga_z = float(report_with_mag->mag_z);
+//		}
 
 		++m_sensor_data.read_counter;
 
 		// TODO-JYW: TESTING-TESTING
 		// Generate debug output every second, assuming that a sample is generated every
 		// 125 usecs.
-		if (++m_sensor_data.read_counter % (1000000 / 125) == 0)
-		{
+		if (++m_sensor_data.read_counter % (1000000 / 125) == 0) {
 			DF_LOG_INFO("IMU: accel: [%f, %f, %f]",
-					(double)m_sensor_data.accel_m_s2_x,
-					(double)m_sensor_data.accel_m_s2_y,
-					(double)m_sensor_data.accel_m_s2_z);
+					(double)m_sensor_data.accel_m_s2_x, (double)m_sensor_data.accel_m_s2_y, (double)m_sensor_data.accel_m_s2_z);
 			DF_LOG_INFO("     gyro:  [%f, %f, %f]",
-					(double)m_sensor_data.gyro_rad_s_x,
-					(double)m_sensor_data.gyro_rad_s_y,
-					(double)m_sensor_data.gyro_rad_s_z);
-			DF_LOG_INFO("    temp:  %f C",
-					(double)m_sensor_data.temp_c);
+					(double)m_sensor_data.gyro_rad_s_x, (double)m_sensor_data.gyro_rad_s_y, (double)m_sensor_data.gyro_rad_s_z);
+			DF_LOG_INFO("    temp:  %f C", (double)m_sensor_data.temp_c);
 
-			if (_mag_enabled && mag_error == 0) {
-				DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
-						(double)m_sensor_data.mag_ga_x,
-						(double)m_sensor_data.mag_ga_y,
-						(double)m_sensor_data.mag_ga_z);
-			}
+//			if (_mag_enabled && mag_error == 0) {
+//				DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
+//						(double)m_sensor_data.mag_ga_x,
+//						(double)m_sensor_data.mag_ga_y,
+//						(double)m_sensor_data.mag_ga_z);
+//			}
 		}
 		// TODO-JYW: TESTING-TESTING
 
-		// A FIFO sample is created at 8kHz, which means the interval between samples is 125 us.
-		// The last read FIFO sample at i+1 has an offset of 0.
-		m_sensor_data.time_offset_us = -((read_len / size_of_fifo_packet) - (i + 1)) * 125;
+		if (_mag_enabled) {
+			struct mag_data data = { 0 };
+//			int ret = _bulkRead(MPUREG_EXT_SENS_DATA_00, (uint8_t *)&data, 1);
+			int ret = _bulkRead(MPUREG_EXT_SENS_DATA_00, (uint8_t *)&data, sizeof(mag_data));
+//			_mag->read_reg(0x02, (uint8_t *)&data);
+//			readReg(MPUREG_EXT_SENS_DATA_00, (uint8_t &) data.mag_st1);
+			if (ret != 0) {
+				DF_LOG_ERR("error reading mag data from external sensor data registers");
+			}
+
+			// TODO-JYW: TESTING-TESTING: checking for data ready bit
+//			if (data.mag_st1 & 0x01) {
+//				writeReg(MPUREG_I2C_SLV1_CTRL, BITS_I2C_SLV1_EN | 0x07);
+////				usleep(500);
+//
+//				for (int i = 1; i < 8; i++) {
+//					readReg(MPUREG_EXT_SENS_DATA_00 + i,
+//							*(((uint8_t *) &data) + i));
+//				}
+//				writeReg(MPUREG_I2C_SLV1_CTRL, BITS_I2C_SLV1_DIS);
+
+//				_bulkRead(MPUREG_EXT_SENS_DATA_00 + 1, (uint8_t *)&data.mag_x, sizeof(data) - sizeof(data.mag_st1));
+//				writeReg(MPUREG_I2C_SLV1_CTRL, BITS_I2C_SLV1_DIS | 0x07);
+				int mag_error = _mag->process(data);
+				if (mag_error == 0) {
+					if ((m_sensor_data.read_counter % 10000) == 0) {
+						DF_LOG_INFO("     mag:  [%d, %d, %d] ga",
+								data.mag_x, data.mag_y, data.mag_z);
+					}
+				}
+//			}
+		}
 
 		_publish(m_sensor_data);
 

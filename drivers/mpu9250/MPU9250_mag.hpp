@@ -99,7 +99,7 @@ public:
 	int write_reg(uint8_t reg, uint8_t val);
 
 	/// @return 0 on success, -errno on failure
-	int process(struct fifo_packet_with_mag *fifo_packet);
+	int process(struct mag_data &data);
 
 protected:
 	/// @brief

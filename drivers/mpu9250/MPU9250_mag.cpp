@@ -65,20 +65,13 @@ using namespace DriverFramework;
 #define BIT_FIFO_OVERFLOW_INT  (0x10)
 #define BIT_I2C_SLV0_EN     (0x80)
 #define BIT_I2C_SLV1_EN     (0x80)
+#define BIT_I2C_SLV1_DIS    (0x00)
 #define BIT_I2C_SLV2_EN     (0x80)
 #define BIT_I2C_SLV4_EN     (0x80)
 #define BIT_I2C_SLV4_DONE   (0x40)
 
 #define MPU9250_FIFO_MAX_SIZE  (4000)
 #define MPU9250_FIFO_DEFAULT_SIZE  (512)
-
-// MPU9250 Magnetometer Register Addresses: Defines only the register addresses
-// used in MPU9250 driver.
-#define MPU9250_MAG_REG_WIA		0x00
-#define MPU9250_MAG_REG_CNTL1	0x0a
-#define MPU9250_MAG_REG_ASAX	0x10
-#define MPU9250_MAG_REG_ASAY    0x11
-#define MPU9250_MAG_REG_ASAZ    0x12
 
 // Full Scale Range of the magnetometer chip AK89xx in MPU9250
 #define MPU9250_AK89xx_FSR		4915
@@ -131,6 +124,7 @@ enum MPU9250_REG_ADDR
 	MPU9250_REG_INT_BYPASS = 55,
 	MPU9250_REG_INT_EN = 56,
 	MPU9250_REG_INT_STATUS = 58,
+	MPU9250_REG_EXT_SENS_DATA_00 = 73,
 	MPU9250_REG_I2C_SLV1_DO = 100,
 	MPU9250_REG_I2C_MST_DELAY_CTRL = 103,
 	MPU9250_REG_USER_CTRL = 106,
@@ -158,6 +152,14 @@ enum MPU9250_COMPASS_REG_ADDR
 	MPU9250_COMP_REG_ASAY = 0x11,
 	MPU9250_COMP_REG_ASAZ = 0x12,
 };
+// MPU9250 Magnetometer Register Addresses: Defines only the register addresses
+// used in MPU9250 driver.
+#define MPU9250_MAG_REG_WIA		0x00
+#define MPU9250_MAG_REG_CNTL1	0x0a
+#define MPU9250_MAG_REG_HXL     0x03
+#define MPU9250_MAG_REG_ASAX	0x10
+#define MPU9250_MAG_REG_ASAY    0x11
+#define MPU9250_MAG_REG_ASAZ    0x12
 
 /**
  * AK8963 (Included MPU-9250 package.)
@@ -255,8 +257,8 @@ int MPU9250_mag::_convert_sample_rate_enum_to_hz(
 int MPU9250_mag::_initialize(int gyro_sample_rate_in_hz)
 {
 // TODO-JYW: TESTING-TESTING: Uncomment when complete.
-	uint8_t i2c_mst_delay = 0;
-	uint8_t i2c_mst_delay_ctrl = 0;
+//	uint8_t i2c_mst_delay = 0;
+//	uint8_t i2c_mst_delay_ctrl = 0;
 	uint8_t i2c_mst_ctrl = 0;
 	uint8_t user_ctrl = 0;
 	int result;
@@ -312,6 +314,25 @@ int MPU9250_mag::_initialize(int gyro_sample_rate_in_hz)
 	write_reg(MPU9250_COMP_REG_CNTL1,
 			BIT_MAG_CNTL1_16_BITS | BIT_MAG_CNTL1_MODE_CONTINUOUS_MEASURE_MODE_2);
 	usleep(10000);
+//
+//	i2c_mst_ctrl |= BIT_I2C_MST_CLK_400_KHZ;
+//	DF_LOG_INFO("Writing to the MPU9250_REG_I2C_MST_CTRL register.");
+//	result = _imu.writeReg(MPU9250_REG_I2C_MST_CTRL, i2c_mst_ctrl);
+//	if (result != 0) {
+//		DF_LOG_ERR("IMU I2C master bus config failed");
+//		return -1;
+//	}
+//	usleep(1000);
+//
+//	// Enable the I2C Master I/F module; pins ES_DA and ES_SCL are isolated
+//	// from pins SDA/SDI and SCL/ SCLK.
+//	user_ctrl |= BIT_I2C_MST_EN;
+//	result = _imu.writeReg(MPU9250_REG_USER_CTRL, user_ctrl);
+//	if (result != 0) {
+//		DF_LOG_ERR("Failed to enabled I2C master mode");
+//		return -1;
+//	}
+//	usleep(1000);
 
 	// Slave 0 provides ST1, mag data, and ST2 data in a bulk transfer of
 	// 8 bytes of data.  Use the address of ST1 in SLV0_REG as the beginning
@@ -320,11 +341,19 @@ int MPU9250_mag::_initialize(int gyro_sample_rate_in_hz)
 			MPU9250_AK8963_I2C_ADDR | MPU9250_AK8963_I2C_READ);
 	_imu.writeReg(MPU9250_REG_I2C_SLV0_REG, MPU9250_COMP_REG_ST1);
 	_imu.writeReg(MPU9250_REG_I2C_SLV0_CTRL, BIT_I2C_SLV0_EN | 0x08); // 0x08 = the number of bytes of data to be transferred
+//	_imu.writeReg(MPU9250_REG_I2C_SLV0_CTRL, BIT_I2C_SLV0_EN | 0x01); // 0x08 = the number of bytes of data to be transferred
 	usleep(10000);
+////
+//	_imu.writeReg(MPU9250_REG_I2C_SLV1_ADDR,
+//			MPU9250_AK8963_I2C_ADDR | MPU9250_AK8963_I2C_READ);
+//	_imu.writeReg(MPU9250_REG_I2C_SLV1_REG, MPU9250_COMP_REG_DATA);
+////////	_imu.writeReg(MPU9250_REG_I2C_SLV0_CTRL, BIT_I2C_SLV0_EN | 0x08); // 0x08 = the number of bytes of data to be transferred
+//	_imu.writeReg(MPU9250_REG_I2C_SLV1_CTRL, BIT_I2C_SLV1_DIS); // 0x08 = the number of bytes of data to be transferred
+//	usleep(10000);
 
 	// Configure the rate at which the mag will be sampled for new data.
 	// TODO-JYW: TESTING-TESTING:
-	_imu.writeReg(MPU9250_REG_SMPLRT_DIV, 0x7F);
+//	_imu.writeReg(MPU9250_REG_SMPLRT_DIV, 0x7F);
 
 //	// Slave 1 provides the 6 bytes of mag data. Measurement data is
 //	// stored in two’s complement in Little Endian format. Measurement range of
@@ -351,19 +380,19 @@ int MPU9250_mag::_initialize(int gyro_sample_rate_in_hz)
 //	i2c_mst_delay = gyro_sample_rate_in_hz / _sample_rate_in_hz - 1;
 	// TODO-JYW: TESTING-TESTING
 //	i2c_mst_delay = gyro_sample_rate_in_hz / 100;
-	i2c_mst_delay = 31;
+//	i2c_mst_delay = 31;
 //	i2c_mst_delay = 0;
-	_imu.writeReg(MPU9250_REG_I2C_SLV4_CTRL, i2c_mst_delay);
-	DF_LOG_INFO("Set I2C_SLV4_CTRL i2c_mst_dly = %u", i2c_mst_delay);
-	usleep(10000);
+//	_imu.writeReg(MPU9250_REG_I2C_SLV4_CTRL, i2c_mst_delay);
+//	DF_LOG_INFO("Set I2C_SLV4_CTRL i2c_mst_dly = %u", i2c_mst_delay);
+//	usleep(10000);
 
 	// Delay shadowing mag data until all of the data is received.
 //	i2c_mst_delay_ctrl |= BIT_DELAY_ES_SHADOW;
 	// Enable delayed I2C transfers for the mag on Slave 0 registers.
-	i2c_mst_delay_ctrl |= BIT_SLV0_DLY_EN;
-	_imu.writeReg(MPU9250_REG_I2C_MST_DELAY_CTRL, i2c_mst_delay_ctrl);
-	DF_LOG_INFO("Enabled delayed access on I2C slave 0");
-	usleep(10000);
+//	i2c_mst_delay_ctrl |= BIT_SLV0_DLY_EN;
+//	_imu.writeReg(MPU9250_REG_I2C_MST_DELAY_CTRL, i2c_mst_delay_ctrl);
+//	DF_LOG_INFO("Enabled delayed access on I2C slave 0");
+//	usleep(10000);
 
 	return 0;
 }
@@ -629,13 +658,24 @@ int MPU9250_mag::write_reg(uint8_t reg, uint8_t val)
 	return 0;
 }
 
-int MPU9250_mag::process(struct fifo_packet_with_mag *fifo_packet)
+int MPU9250_mag::process(struct mag_data &data)
 {
-	uint8_t status1 = fifo_packet->mag_st1;
-	uint8_t status2 = fifo_packet->mag_st2;
-	static int data_ready_bit_counter = 0;
+//	uint8_t status1 = fifo_packet->mag_st1;
+//	uint8_t status2 = fifo_packet->mag_st2;
+//	static int data_ready_bit_counter = 0;
 	static int hofl_bit_counter = 0;
+//	static int mag_data_debug_output_counter = 0;
 //	uint8_t mag_data_ready;
+
+//#pragma pack(push, 1)
+//	struct mag_data {
+//		char        mag_st1; // mag ST1 (1B)
+//		int16_t     mag_x;   // (2B)
+//		int16_t     mag_y;   // (2B)
+//		int16_t     mag_z;   // (2B)
+//		char        mag_st2; // mag ST2 (1B)
+//	};
+//#pragma pack(pop)
 
 	// TODO-JYW: LEFT-OFF:
 	// Change the code to not use the FIFO to read mag samples.  Periodically poll the
@@ -648,66 +688,62 @@ int MPU9250_mag::process(struct fifo_packet_with_mag *fifo_packet)
 //	data->mag_range_ga = driver_context.mag_range_ga;
 //	data->mag_scaling = driver_context.mag_scaling;
 //
+
+	// TODO-JYW: TESTING-TESTING:
+//	_imu.writeReg(MPU9250_REG_I2C_SLV0_ADDR,
+//			MPU9250_AK8963_I2C_ADDR | MPU9250_AK8963_I2C_READ);
+//	_imu.writeReg(MPU9250_REG_I2C_SLV0_REG, MPU9250_COMP_REG_DATA);
+//	_imu.writeReg(MPU9250_REG_I2C_SLV0_CTRL, BIT_I2C_SLV0_EN | 0x07); // 0x07 = the number of bytes of data to be transferred
+
+	// Data Ready flag not set or data overrun bit set.
+	int return_status;
+//	if (!(data.mag_st1 & 0x01)) {
+//		// TODO-JYW: TESTING-TESTING
+//		if ((++data_ready_bit_counter % 10000) == 0) {
+//			DF_LOG_ERR("data ready bit not set (x10000)");
+//		}
+//		return -2;
+//	}
+
 	// magnetic sensor overflow HOFL bit set
 	// TODO-JYW: Replace the magic number.
-	if (status2 & 0x08) {
+	if (data.mag_st2 & 0x08) {
 		if ((++hofl_bit_counter % 10000) == 0) {
 			DF_LOG_ERR("overflow HOFL bit set (x1000)");
 		}
 		return -3;
 	}
 
-	// Data Ready flag not set or data overrun bit set.
-	int return_status;
-	if (!(status1 & 0x01)) {
-		// TODO-JYW: TESTING-TESTING
-		if ((++data_ready_bit_counter % 10000) == 0) {
-			DF_LOG_ERR("data ready bit not set (x10000)");
-		}
-		return -2;
-	}
-	else
-	{
-		return_status = 0;
-	}
-
-	// TODO-JYW: TESTING-TESTING:
-//	_imu.writeReg(MPU9250_REG_I2C_SLV0_ADDR,
-//			MPU9250_AK8963_I2C_ADDR | MPU9250_AK8963_I2C_READ);
-//	_imu.writeReg(MPU9250_REG_I2C_SLV0_REG, MPU9250_COMP_REG_ST1);
-//	_imu.writeReg(MPU9250_REG_I2C_SLV0_CTRL, BIT_I2C_SLV0_EN | 0x08); // 0x08 = the number of bytes of data to be transferred
+	return_status = 0;
 
 //
 //	data->mag_data_ready = true;
 
 //	DF_LOG_INFO("valid mag sample detected");
-	fifo_packet->mag_x = ImuSensor::swap16(fifo_packet->mag_x);
-	fifo_packet->mag_y = ImuSensor::swap16(fifo_packet->mag_y);
-	fifo_packet->mag_z = ImuSensor::swap16(fifo_packet->mag_z);
+	data.mag_x = ImuSensor::swap16(data.mag_x);
+	data.mag_y = ImuSensor::swap16(data.mag_y);
+	data.mag_z = ImuSensor::swap16(data.mag_z);
 
 	// H_adj = H * ((ASA-128)*0.5/128 + 1)
 	//       = H * ((ASA-128) / 256 + 1)
 	// H is the raw compass reading, ((ASA-128) / 256 + 1) has been
 	// computed and stored in compass_cal_f
-	fifo_packet->mag_x =
-			(int16_t) ((int) fifo_packet->mag_x * _mag_sens_adj[0]);
-	fifo_packet->mag_y =
-			(int16_t) ((int) fifo_packet->mag_y * _mag_sens_adj[1]);
-	fifo_packet->mag_z =
-			(int16_t) ((int) fifo_packet->mag_z * _mag_sens_adj[2]);
+	data.mag_x = (int16_t) ((int) data.mag_x * _mag_sens_adj[0]);
+	data.mag_y = (int16_t) ((int) data.mag_y * _mag_sens_adj[1]);
+	data.mag_z = (int16_t) ((int) data.mag_z * _mag_sens_adj[2]);
 
 	// Convert the native units of the sensor (micro-Teslas) to Gauss
-	fifo_packet->mag_x /= 100;
-	fifo_packet->mag_y /= 100;
-	fifo_packet->mag_z /= 100;
+	data.mag_x /= 100;
+	data.mag_y /= 100;
+	data.mag_z /= 100;
 
 	// Swap magnetometer x and y axis
 	// Magnetometer X axis = Gyro and Accel Y axis
 	// Magnetometer Y axis = Gyro and Accel X axis
 	// Magnetometer Z axis = Gyro and Accel Z axis
-	int16_t temp_mag_x = fifo_packet->mag_x;
-	fifo_packet->mag_x = fifo_packet->mag_y;
-	fifo_packet->mag_y = temp_mag_x;
+	int16_t temp_mag_x = data.mag_x;
+	data.mag_x = data.mag_y;
+	data.mag_y = temp_mag_x;
 
 	return return_status;
 }
