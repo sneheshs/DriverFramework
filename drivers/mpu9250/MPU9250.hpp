@@ -54,13 +54,6 @@ namespace DriverFramework
 #define MPU_WHOAMI_9250			0x71
 
 #pragma pack(push, 1)
-struct mag_data {
-	char        mag_st1; // mag ST1 (1B)
-	int16_t     mag_x;   // uT (2B)
-	int16_t     mag_y;   // uT (2B)
-	int16_t     mag_z;   // uT (2B)
-	char        mag_st2; // mag ST2 (1B)
-};
 struct fifo_packet {
 	int16_t		accel_x;
 	int16_t		accel_y;
@@ -84,6 +77,15 @@ struct fifo_packet_with_mag {
 	int16_t     mag_y;   // 17-18 (2B)
 	int16_t     mag_z;   // 19-20 (2B)
 	char        mag_st2; // 21 mag ST2 (1B)
+};
+// This data structure is a copy of the segment of the above fifo_packet_with_mag data
+// struture that contains mag data.
+struct mag_data {
+	char        mag_st1; // mag ST1 (1B)
+	int16_t     mag_x;   // uT (2B)
+	int16_t     mag_y;   // uT (2B)
+	int16_t     mag_z;   // uT (2B)
+	char        mag_st2; // mag ST2 (1B)
 };
 #pragma pack(pop)
 

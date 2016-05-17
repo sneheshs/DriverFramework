@@ -165,6 +165,8 @@
 
 #define MIN(_x, _y) (_x) > (_y) ? (_y) : (_x)
 
+#define MPU9250_DEBUG 1
+
 using namespace DriverFramework;
 
 int MPU9250::mpu9250_init()
@@ -172,7 +174,8 @@ int MPU9250::mpu9250_init()
 	// Use 1 MHz for normal registers.
 	_setBusFrequency(SPI_FREQUENCY_1MHZ);
 
-	// TODO-JYW: TESTING-TESTING
+	// TODO-JYW: LEFT-OFF: Add mag_enabled as an optional ctor param from the
+	// the wrapper class and add a start_with_mag option to the config file.
 	_mag_enabled = true;
 	// TODO-JYW: TESTING-TESTING
 
@@ -201,10 +204,6 @@ int MPU9250::mpu9250_init()
 
 	m_synchronize.unlock();
 
-	// TODO-JYW: TESTING-TESTING
-//	int result = _writeReg(MPUREG_PWR_MGMT_1,
-//			       BIT_H_RESET |
-//			       MPU_CLK_SEL_AUTO);
 	int result = _writeReg(MPUREG_PWR_MGMT_1, BIT_H_RESET);
 
 	if (result != 0) {
@@ -217,13 +216,6 @@ int MPU9250::mpu9250_init()
 	if (result != 0) {
 		DF_LOG_ERR("wakeup sensor failed");
 	}
-
-// TODO-JYW: TESTING-TESTING
-//	result = _writeReg(MPUREG_PWR_MGMT_2, 0);
-//
-//	if (result != 0) {
-//		DF_LOG_ERR("clock selection failed");
-//	}
 
 	usleep(1000);
 
@@ -302,16 +294,6 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
-	// TODO-JYW: TESTING-TESTING
-//	result = _writeReg(MPUREG_ACCEL_CONFIG2,
-//			BIT_FIFO_SIZE_4096);
-//
-//	if (result != 0) {
-//		DF_LOG_ERR("FIFO configuration failed");
-//	}
-
-//	usleep(1000);
-
 	// Initialize the magnetometer inside the IMU, if enabled by the caller.
 	if (_mag_enabled) {
 		if (_mag == nullptr) {
@@ -320,6 +302,7 @@ int MPU9250::mpu9250_init()
 					MPU9x50_COMPASS_SAMPLE_RATE_100HZ)) != nullptr) {
 				// Initialize the magnetometer, providing the gyro sample rate for
 				// internal calculations.
+				// TODO-JYW: Retrieve the value of 8000 from the constants used for config.
 				result = _mag->initialize(8000); // 8000 = sample rate in Hz of the gyro
 				if (result != 0) {
 					DF_LOG_ERR("Magnetometer initialization failed");
@@ -451,9 +434,6 @@ void MPU9250::reset_fifo()
 
 void MPU9250::_measure()
 {
-	// TODO-JYW: TESTING-TESTING
-//	usleep(1000);
-
 	// Use 1 MHz for normal registers.
 	_setBusFrequency(SPI_FREQUENCY_1MHZ);
 	uint8_t int_status = 0;
@@ -525,8 +505,6 @@ void MPU9250::_measure()
 	// Luckily 10 MHz seems to work fine.
 
 	_setBusFrequency(SPI_FREQUENCY_10MHZ);
-//	DF_LOG_INFO("bulk read at: 0x%X, len: %d, size of packet: %d", fifo_read_buf, read_len,
-//			size_of_fifo_packet);
 	result = _bulkRead(MPUREG_FIFO_R_W, fifo_read_buf, read_len);
 
 	if (result != 0) {
@@ -610,15 +588,7 @@ void MPU9250::_measure()
 			_last_temp_c = temp_c;
 		}
 
-		// TODO-JYW: LEFT-OFF:
-		// The FIFO is repeatedly getting corrupted.  Verify that the data appears valid
-		// when it is not corrupted.  Also, change the MPU configuration to match that which
-		// we are using in the legacy driver, particularly the setting which prevents
-		// writing into the FIFO if it is already full.
-
 		m_synchronize.lock();
-//		DF_LOG_INFO("read valid data");
-
 		m_sensor_data.accel_m_s2_x = float(report->accel_x)
 				* (MPU9250_ONE_G / 2048.0f);
 		m_sensor_data.accel_m_s2_y = float(report->accel_y)
@@ -630,73 +600,34 @@ void MPU9250::_measure()
 		m_sensor_data.gyro_rad_s_y = float(report->gyro_y) * GYRO_RAW_TO_RAD_S;
 		m_sensor_data.gyro_rad_s_z = float(report->gyro_z) * GYRO_RAW_TO_RAD_S;
 
-		// TODO-JYW: Replace the number with a constant.
-		// The only error of significance is the mag overflow which can corrupt the sample.
-		// A data not ready error can be ignored to allow the previous sample from the sensor
-		// to be used.
-//		if (_mag_enabled && mag_error == 0) {
-//			fifo_packet_with_mag *report_with_mag = (fifo_packet_with_mag *)report;
-//			m_sensor_data.mag_ga_x = float(report_with_mag->mag_x);
-//			m_sensor_data.mag_ga_y = float(report_with_mag->mag_y);
-//			m_sensor_data.mag_ga_z = float(report_with_mag->mag_z);
-//		}
-
 		++m_sensor_data.read_counter;
 
-		// TODO-JYW: TESTING-TESTING
 		// Generate debug output every second, assuming that a sample is generated every
-		// 125 usecs.
+		// 125 usecs
+#ifdef MPU9250_DEBUG
 		if (++m_sensor_data.read_counter % (1000000 / 125) == 0) {
 			DF_LOG_INFO("IMU: accel: [%f, %f, %f]",
 					(double)m_sensor_data.accel_m_s2_x, (double)m_sensor_data.accel_m_s2_y, (double)m_sensor_data.accel_m_s2_z);
 			DF_LOG_INFO("     gyro:  [%f, %f, %f]",
 					(double)m_sensor_data.gyro_rad_s_x, (double)m_sensor_data.gyro_rad_s_y, (double)m_sensor_data.gyro_rad_s_z);
 			DF_LOG_INFO("    temp:  %f C", (double)m_sensor_data.temp_c);
-
-//			if (_mag_enabled && mag_error == 0) {
-//				DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
-//						(double)m_sensor_data.mag_ga_x,
-//						(double)m_sensor_data.mag_ga_y,
-//						(double)m_sensor_data.mag_ga_z);
-//			}
 		}
-		// TODO-JYW: TESTING-TESTING
+#endif
 
 		if (_mag_enabled) {
 			struct fifo_packet_with_mag *report_with_mag_data =
 					(struct fifo_packet_with_mag *)report;
-//			struct mag_data data = { 0 };
-//			int ret = _bulkRead(MPUREG_EXT_SENS_DATA_00, (uint8_t *)&data, 1);
-//			int ret = _bulkRead(MPUREG_EXT_SENS_DATA_00, (uint8_t *)&data, sizeof(mag_data));
-//			_mag->read_reg(0x02, (uint8_t *)&data);
-//			readReg(MPUREG_EXT_SENS_DATA_00, (uint8_t &) data.mag_st1);
-//			if (ret != 0) {
-//				DF_LOG_ERR("error reading mag data from external sensor data registers");
-//			}
-
-			// TODO-JYW: TESTING-TESTING: checking for data ready bit
-//			if (data.mag_st1 & 0x01) {
-//				writeReg(MPUREG_I2C_SLV1_CTRL, BITS_I2C_SLV1_EN | 0x07);
-////				usleep(500);
-//
-//				for (int i = 1; i < 8; i++) {
-//					readReg(MPUREG_EXT_SENS_DATA_00 + i,
-//							*(((uint8_t *) &data) + i));
-//				}
-//				writeReg(MPUREG_I2C_SLV1_CTRL, BITS_I2C_SLV1_DIS);
-
-//				_bulkRead(MPUREG_EXT_SENS_DATA_00 + 1, (uint8_t *)&data.mag_x, sizeof(data) - sizeof(data.mag_st1));
-//				writeReg(MPUREG_I2C_SLV1_CTRL, BITS_I2C_SLV1_DIS | 0x07);
-				int mag_error = _mag->process((struct mag_data &)report_with_mag_data->mag_st1);
-				if (mag_error == 0) {
-					if ((m_sensor_data.read_counter % 10000) == 0) {
-						DF_LOG_INFO("     mag:  [%d, %d, %d] ga",
-								report_with_mag_data->mag_x,
-								report_with_mag_data->mag_y,
-								report_with_mag_data->mag_z);
-					}
+			int mag_error = _mag->process((struct mag_data &)report_with_mag_data->mag_st1);
+#ifdef MPU9250_DEBUG
+			if (mag_error == 0) {
+				if ((m_sensor_data.read_counter % 10000) == 0) {
+					DF_LOG_INFO("     mag:  [%d, %d, %d] ga",
+							report_with_mag_data->mag_x,
+							report_with_mag_data->mag_y,
+							report_with_mag_data->mag_z);
 				}
-//			}
+			}
+#endif
 		}
 
 		_publish(m_sensor_data);
