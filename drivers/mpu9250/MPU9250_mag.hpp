@@ -42,28 +42,24 @@ class MPU9250;
 
 #define MPU9X50_INTERNAL_SAMPLE_RATE_HZ 1000
 
-/**
- * Supported Sample rate for gyro.
- * If gyro sample rate is set to 8KHz, accelerometer sample rate is 1KHz.
- * If other sample rate is selected, the same sample rate is set for gyro and
- * accelerometer.
- */
-enum gyro_sample_rate_e {
-   MPU9x50_SAMPLE_RATE_100HZ = 0,
-   MPU9x50_SAMPLE_RATE_200HZ,
-   MPU9x50_SAMPLE_RATE_500HZ,
-   MPU9x50_SAMPLE_RATE_1000HZ,
-   MPU9x50_SAMPLE_RATE_8000HZ,
-   NUM_MPU9X50_SAMPLE_RATE
-};
+///**
+// * Supported Sample rate for gyro.
+// * If gyro sample rate is set to 8KHz, accelerometer sample rate is 1KHz.
+// * If other sample rate is selected, the same sample rate is set for gyro and
+// * accelerometer.
+// */
+//enum gyro_sample_rate_e {
+//   MPU9x50_SAMPLE_RATE_100HZ = 0,
+//   MPU9x50_SAMPLE_RATE_200HZ,
+//   MPU9x50_SAMPLE_RATE_500HZ,
+//   MPU9x50_SAMPLE_RATE_1000HZ,
+//   MPU9x50_SAMPLE_RATE_8000HZ,
+//   NUM_MPU9X50_SAMPLE_RATE
+//};
 
-#define MPU9X50_MAG_MAX_SAMPLE_RATE_HZ   100
-/**
- * Sample rate for compass.
- * NOTE: only 100Hz compass sampling rate is supported in current driver.
- */
 enum mag_sample_rate_e {
-   MPU9x50_COMPASS_SAMPLE_RATE_100HZ = 0,
+   MPU9x50_COMPASS_SAMPLE_RATE_8HZ = 0,
+   MPU9x50_COMPASS_SAMPLE_RATE_100HZ = 1,
    NUM_MPU9X50_COMPASS_SAMPLE_RATE
 };
 
@@ -72,7 +68,7 @@ class MPU9250_mag
 public:
 	MPU9250_mag(MPU9250 &imu, enum mag_sample_rate_e sample_rate) :
 		_mag_initialized(false),
-		_sample_rate_in_hz(_convert_sample_rate_enum_to_hz(sample_rate)),
+		_sample_rate(sample_rate),
 		_imu(imu)
 	{ };
 
@@ -116,7 +112,7 @@ private:
 	float _mag_scaling;
 	int _mag_sens_adj[3];
 	float _mag_initialized;
-	int _sample_rate_in_hz;
+	mag_sample_rate_e _sample_rate;
 
 	MPU9250 &_imu;
 

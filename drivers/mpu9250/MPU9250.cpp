@@ -38,129 +38,6 @@
 #include "MPU9250.hpp"
 #include "MPU9250_mag.hpp"
 
-#define MPUREG_WHOAMI			0x75
-#define MPUREG_SMPLRT_DIV		0x19
-#define MPUREG_CONFIG			0x1A
-#define MPUREG_GYRO_CONFIG		0x1B
-#define MPUREG_ACCEL_CONFIG		0x1C
-#define MPUREG_ACCEL_CONFIG2		0x1D
-#define MPUREG_LPACCEL_ODR		0x1E
-#define MPUREG_WOM_THRESH		0x1F
-#define MPUREG_FIFO_EN			0x23
-#define MPUREG_I2C_MST_CTRL		0x24
-#define MPUREG_I2C_SLV0_ADDR		0x25
-#define MPUREG_I2C_SLV0_REG		0x26
-#define MPUREG_I2C_SLV0_CTRL		0x27
-#define MPUREG_I2C_SLV1_ADDR		0x28
-#define MPUREG_I2C_SLV1_REG		0x29
-#define MPUREG_I2C_SLV1_CTRL		0x2A
-#define MPUREG_I2C_SLV2_ADDR		0x2B
-#define MPUREG_I2C_SLV2_REG		0x2C
-#define MPUREG_I2C_SLV2_CTRL		0x2D
-#define MPUREG_I2C_SLV3_ADDR		0x2E
-#define MPUREG_I2C_SLV3_REG		0x2F
-#define MPUREG_I2C_SLV3_CTRL		0x30
-#define MPUREG_I2C_SLV4_ADDR		0x31
-#define MPUREG_I2C_SLV4_REG		0x32
-#define MPUREG_I2C_SLV4_DO		0x33
-#define MPUREG_I2C_SLV4_CTRL		0x34
-#define MPUREG_I2C_SLV4_DI		0x35
-#define MPUREG_I2C_MST_STATUS		0x36
-#define MPUREG_INT_PIN_CFG		0x37
-#define MPUREG_INT_ENABLE		0x38
-#define MPUREG_INT_STATUS		0x3A
-#define MPUREG_ACCEL_XOUT_H		0x3B
-#define MPUREG_ACCEL_XOUT_L		0x3C
-#define MPUREG_ACCEL_YOUT_H		0x3D
-#define MPUREG_ACCEL_YOUT_L		0x3E
-#define MPUREG_ACCEL_ZOUT_H		0x3F
-#define MPUREG_ACCEL_ZOUT_L		0x40
-#define MPUREG_TEMP_OUT_H		0x41
-#define MPUREG_TEMP_OUT_L		0x42
-#define MPUREG_GYRO_XOUT_H		0x43
-#define MPUREG_GYRO_XOUT_L		0x44
-#define MPUREG_GYRO_YOUT_H		0x45
-#define MPUREG_GYRO_YOUT_L		0x46
-#define MPUREG_GYRO_ZOUT_H		0x47
-#define MPUREG_GYRO_ZOUT_L		0x48
-#define MPUREG_EXT_SENS_DATA_00		0x49
-#define MPUREG_I2C_SLV0_D0		0x63
-#define MPUREG_I2C_SLV1_D0		0x64
-#define MPUREG_I2C_SLV2_D0		0x65
-#define MPUREG_I2C_SLV3_D0		0x66
-#define MPUREG_I2C_MST_DELAY_CTRL	0x67
-#define MPUREG_SIGNAL_PATH_RESET	0x68
-#define MPUREG_MOT_DETECT_CTRL		0x69
-#define MPUREG_USER_CTRL		0x6A
-#define MPUREG_PWR_MGMT_1		0x6B
-#define MPUREG_PWR_MGMT_2		0x6C
-#define MPUREG_FIFO_COUNTH		0x72
-#define MPUREG_FIFO_COUNTL		0x73
-#define MPUREG_FIFO_R_W			0x74
-
-// Configuration bits MPU 9250
-#define BIT_SLEEP			0x40
-#define BIT_H_RESET			0x80
-#define MPU_CLK_SEL_AUTO		0x01
-
-#define BITS_USER_CTRL_FIFO_EN		0x40
-#define BITS_USER_CTRL_FIFO_RST		0x04
-#define BITS_USER_CTRL_I2C_MST_EN  	0x20
-
-#define BITS_CONFIG_FIFO_MODE_OVERWRITE	0x00
-#define BITS_CONFIG_FIFO_MODE_STOP	0x40
-
-#define BIT_FIFO_SIZE_1024  (0x40)
-#define BIT_FIFO_SIZE_2048  (0x80)
-#define BIT_FIFO_SIZE_4096  (0xC0)
-
-#define BITS_GYRO_ST_X			0x80
-#define BITS_GYRO_ST_Y			0x40
-#define BITS_GYRO_ST_Z			0x20
-#define BITS_FS_250DPS			0x00
-#define BITS_FS_500DPS			0x08
-#define BITS_FS_1000DPS			0x10
-#define BITS_FS_2000DPS			0x18
-#define BITS_FS_MASK			0x18
-// This is FCHOICE_B which is the inverse of FCHOICE
-#define BITS_BW_3600HZ			0x02
-// The FCHOICE bits are the same for all Bandwidths below 3600 Hz.
-#define BITS_BW_LT3600HZ		0x00
-
-#define BITS_DLPF_CFG_250HZ		0x00
-#define BITS_DLPF_CFG_184HZ		0x01
-#define BITS_DLPF_CFG_92HZ		0x02
-#define BITS_DLPF_CFG_41HZ		0x03
-#define BITS_DLPF_CFG_20HZ		0x04
-#define BITS_DLPF_CFG_10HZ		0x05
-#define BITS_DLPF_CFG_5HZ		0x06
-#define BITS_DLPF_CFG_3600HZ		0x07
-#define BITS_DLPF_CFG_MASK		0x07
-
-#define BITS_FIFO_ENABLE_TEMP_OUT	0x80
-#define BITS_FIFO_ENABLE_GYRO_XOUT	0x40
-#define BITS_FIFO_ENABLE_GYRO_YOUT	0x20
-#define BITS_FIFO_ENABLE_GYRO_ZOUT	0x10
-#define BITS_FIFO_ENABLE_ACCEL		0x08
-#define BITS_FIFO_ENABLE_SLV2		0x04
-#define BITS_FIFO_ENABLE_SLV1		0x02
-#define BITS_FIFO_ENABLE_SLV0		0x01
-
-#define BITS_ACCEL_CONFIG_16G		0x18
-
-// This is ACCEL_FCHOICE_B which is the inverse of ACCEL_FCHOICE
-#define BITS_ACCEL_CONFIG2_BW_1130HZ	0x08
-
-#define BITS_I2C_SLV1_EN     0x80
-#define BITS_I2C_SLV1_DIS    0x00
-
-#define BIT_RAW_RDY_EN			0x01
-#define BIT_INT_ANYRD_2CLEAR		0x10
-
-#define BITS_INT_STATUS_FIFO_OVERFLOW	0x10
-
-#define BITS_I2C_MST_CLK_400_KHZ	0x0D
-
 #define MPU9250_ONE_G			9.80665f
 
 #define MIN(_x, _y) (_x) > (_y) ? (_y) : (_x)
@@ -209,21 +86,14 @@ int MPU9250::mpu9250_init()
 	if (result != 0) {
 		DF_LOG_ERR("reset failed");
 	}
-	usleep(100000);
-	DF_LOG_INFO("Reset MPU9250");
 
+	usleep(100000);
+
+	DF_LOG_INFO("Reset MPU9250");
 	result = _writeReg(MPUREG_PWR_MGMT_1, 0);
+
 	if (result != 0) {
 		DF_LOG_ERR("wakeup sensor failed");
-	}
-
-	usleep(1000);
-
-	result = _writeReg(MPUREG_USER_CTRL,
-			BITS_USER_CTRL_FIFO_RST | BITS_USER_CTRL_FIFO_EN);
-
-	if (result != 0) {
-		DF_LOG_ERR("User ctrl config failed");
 	}
 
 	usleep(1000);
@@ -232,8 +102,8 @@ int MPU9250::mpu9250_init()
 		result = _writeReg(MPUREG_FIFO_EN,
 				BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
 						| BITS_FIFO_ENABLE_GYRO_YOUT
-						| BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL |
-				  		  BITS_FIFO_ENABLE_SLV0);  // SLV0 is configured for bulk transfer of mag data over I2C
+						| BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL
+						| BITS_FIFO_ENABLE_SLV0); // SLV0 is configured for bulk transfer of mag data over I2C
 	} else {
 		result = _writeReg(MPUREG_FIFO_EN,
 				BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
@@ -261,6 +131,7 @@ int MPU9250::mpu9250_init()
 	//	DF_LOG_ERR("sample rate config failed");
 	//}
 	//usleep(1000);
+
 	result = _writeReg(MPUREG_CONFIG,
 			BITS_DLPF_CFG_250HZ | BITS_CONFIG_FIFO_MODE_OVERWRITE);
 
@@ -295,25 +166,24 @@ int MPU9250::mpu9250_init()
 	usleep(1000);
 
 	// Initialize the magnetometer inside the IMU, if enabled by the caller.
-	if (_mag_enabled) {
-		if (_mag == nullptr) {
-			DF_LOG_INFO("Instantiating MPU9250_mag class.");
-			if ((_mag = new MPU9250_mag(*this,
-					MPU9x50_COMPASS_SAMPLE_RATE_100HZ)) != nullptr) {
-				// Initialize the magnetometer, providing the gyro sample rate for
-				// internal calculations.
-				// TODO-JYW: Retrieve the value of 8000 from the constants used for config.
-				result = _mag->initialize(8000); // 8000 = sample rate in Hz of the gyro
-				if (result != 0) {
-					DF_LOG_ERR("Magnetometer initialization failed");
-				}
-				// Reset the FIFO since the mag configuration add more data to the FIFO.
-				reset_fifo();
-			} else {
-				DF_LOG_ERR("Allocation of magnetometer object failed.");
+	if (_mag_enabled && _mag == nullptr) {
+		if ((_mag = new MPU9250_mag(*this, MPU9x50_COMPASS_SAMPLE_RATE_100HZ))
+				!= nullptr) {
+			// Initialize the magnetometer, providing the gyro sample rate for
+			// internal calculations.
+			// TODO-JYW: Retrieve the value of 1000 from the constants used for config.
+			result = _mag->initialize(1000); // 1000 = output data rate in Hz
+			if (result != 0) {
+				DF_LOG_ERR("Magnetometer initialization failed");
 			}
+		} else {
+			DF_LOG_ERR("Allocation of magnetometer object failed.");
 		}
 	}
+
+	// Enable/clear the FIFO of any residual data and enable the I2C master clock, if the mag is
+	// enabled.
+	reset_fifo();
 
 	return 0;
 }
@@ -423,9 +293,16 @@ void MPU9250::reset_fifo()
 {
 	// Use 1 MHz for normal registers.
 	_setBusFrequency(SPI_FREQUENCY_1MHZ);
-	int result = _writeReg(MPUREG_USER_CTRL,
-			BITS_USER_CTRL_FIFO_RST | BITS_USER_CTRL_FIFO_EN
-					| BITS_USER_CTRL_I2C_MST_EN);
+
+	int result;
+	if (_mag_enabled) {
+		result = _writeReg(MPUREG_USER_CTRL,
+				BITS_USER_CTRL_FIFO_RST | BITS_USER_CTRL_FIFO_EN
+						| BITS_USER_CTRL_I2C_MST_EN);
+	} else {
+		result = _writeReg(MPUREG_USER_CTRL,
+				BITS_USER_CTRL_FIFO_RST | BITS_USER_CTRL_FIFO_EN);
+	}
 
 	if (result != 0) {
 		DF_LOG_ERR("FIFO reset failed");
@@ -616,15 +493,14 @@ void MPU9250::_measure()
 
 		if (_mag_enabled) {
 			struct fifo_packet_with_mag *report_with_mag_data =
-					(struct fifo_packet_with_mag *)report;
-			int mag_error = _mag->process((struct mag_data &)report_with_mag_data->mag_st1);
+					(struct fifo_packet_with_mag *) report;
+			int mag_error = _mag->process(
+					(struct mag_data &) report_with_mag_data->mag_st1);
 #ifdef MPU9250_DEBUG
 			if (mag_error == 0) {
 				if ((m_sensor_data.read_counter % 10000) == 0) {
 					DF_LOG_INFO("     mag:  [%d, %d, %d] ga",
-							report_with_mag_data->mag_x,
-							report_with_mag_data->mag_y,
-							report_with_mag_data->mag_z);
+							report_with_mag_data->mag_x, report_with_mag_data->mag_y, report_with_mag_data->mag_z);
 				}
 			}
 #endif
