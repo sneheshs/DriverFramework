@@ -38,7 +38,7 @@
 #include "MPU9250.hpp"
 #include "MPU9250_mag.hpp"
 
-#define MPU9250_ONE_G			9.80665f
+#define MPU9250_ONE_G	9.80665f
 
 #define MIN(_x, _y) (_x) > (_y) ? (_y) : (_x)
 
@@ -131,7 +131,6 @@ int MPU9250::mpu9250_init()
 	//	DF_LOG_ERR("sample rate config failed");
 	//}
 	//usleep(1000);
-
 	result = _writeReg(MPUREG_CONFIG,
 			BITS_DLPF_CFG_250HZ | BITS_CONFIG_FIFO_MODE_OVERWRITE);
 
@@ -167,7 +166,7 @@ int MPU9250::mpu9250_init()
 
 	// Initialize the magnetometer inside the IMU, if enabled by the caller.
 	if (_mag_enabled && _mag == nullptr) {
-		if ((_mag = new MPU9250_mag(*this, MPU9x50_COMPASS_SAMPLE_RATE_100HZ))
+		if ((_mag = new MPU9250_mag(*this, MPU9250_MAG_SAMPLE_RATE_100HZ))
 				!= nullptr) {
 			// Initialize the magnetometer, providing the gyro sample rate for
 			// internal calculations.
@@ -353,9 +352,6 @@ void MPU9250::_measure()
 		return;
 	}
 
-	// TODO-JYW: TESTING-TESTING: Is this statement correct?  The FIFO should be
-	// configurable.
-	//
 	// The FIFO buffer on the MPU is 512 bytes according to the datasheet, so let's use
 	// 36*size_of_fifo_packet.
 	const unsigned buf_len = 36 * size_of_fifo_packet;
@@ -397,7 +393,6 @@ void MPU9250::_measure()
 				* size_of_fifo_packet]);
 
 		/* TODO: add ifdef for endianness */
-		// TODO-JYW: Let the sensor do the byte swapping.
 		report->accel_x = swap16(report->accel_x);
 		report->accel_y = swap16(report->accel_y);
 		report->accel_z = swap16(report->accel_z);
@@ -411,7 +406,8 @@ void MPU9250::_measure()
 		// measured are excessive.
 		if (report->accel_x == INT16_MIN || report->accel_x == INT16_MAX
 				|| report->accel_y == INT16_MIN || report->accel_y == INT16_MAX
-				|| report->accel_z == INT16_MIN || report->accel_z == INT16_MAX) {
+				|| report->accel_z == INT16_MIN
+				|| report->accel_z == INT16_MAX) {
 			m_synchronize.lock();
 			++m_sensor_data.accel_range_hit_counter;
 			m_synchronize.unlock();
@@ -442,7 +438,6 @@ void MPU9250::_measure()
 				_temp_initialized = true;
 			}
 		} else {
-			// TODO-JYW: TESTING-TESTING
 			// Once initialized, check for a temperature change of more than 2 degrees which
 			// points to a FIFO corruption.
 			if (fabs(temp_c - _last_temp_c) > 2.0f) {

@@ -36,8 +36,7 @@
 #include "ImuSensor.hpp"
 #include "MPU9250_mag.hpp"
 
-namespace DriverFramework
-{
+namespace DriverFramework {
 #define MPUREG_WHOAMI			0x75
 #define MPUREG_SMPLRT_DIV		0x19
 #define MPUREG_CONFIG			0x1A
@@ -147,8 +146,18 @@ namespace DriverFramework
 // This is ACCEL_FCHOICE_B which is the inverse of ACCEL_FCHOICE
 #define BITS_ACCEL_CONFIG2_BW_1130HZ	0x08
 
+#define BITS_I2C_SLV0_EN	 0x80
 #define BITS_I2C_SLV1_EN     0x80
 #define BITS_I2C_SLV1_DIS    0x00
+#define BITS_I2C_SLV2_EN     0x80
+#define BITS_I2C_SLV4_EN     0x80
+#define BITS_I2C_SLV4_DONE   0x40
+
+#define BITS_SLV4_DLY_EN     0x10
+#define BITS_SLV3_DLY_EN     0x08
+#define BITS_SLV2_DLY_EN     0x04
+#define BITS_SLV1_DLY_EN     0x02
+#define BITS_SLV0_DLY_EN     0x01
 
 #define BIT_RAW_RDY_EN			0x01
 #define BIT_INT_ANYRD_2CLEAR	0x10
@@ -172,49 +181,51 @@ namespace DriverFramework
 #define MPU_WHOAMI_9250			0x71
 
 #pragma pack(push, 1)
-struct fifo_packet {
-	int16_t		accel_x;
-	int16_t		accel_y;
-	int16_t		accel_z;
-	int16_t		temp;
-	int16_t		gyro_x;
-	int16_t		gyro_y;
-	int16_t		gyro_z;
+struct fifo_packet
+{
+	int16_t accel_x;
+	int16_t accel_y;
+	int16_t accel_z;
+	int16_t temp;
+	int16_t gyro_x;
+	int16_t gyro_y;
+	int16_t gyro_z;
 	//uint8_t		ext_data[24];
 };
-struct fifo_packet_with_mag {
-	int16_t		accel_x;
-	int16_t		accel_y;
-	int16_t		accel_z;
-	int16_t		temp;
-	int16_t		gyro_x;
-	int16_t		gyro_y;
-	int16_t		gyro_z;
-	char        mag_st1; // 14 mag ST1 (1B)
-	int16_t     mag_x;   // 15-16 (2B)
-	int16_t     mag_y;   // 17-18 (2B)
-	int16_t     mag_z;   // 19-20 (2B)
-	char        mag_st2; // 21 mag ST2 (1B)
+struct fifo_packet_with_mag
+{
+	int16_t accel_x;
+	int16_t accel_y;
+	int16_t accel_z;
+	int16_t temp;
+	int16_t gyro_x;
+	int16_t gyro_y;
+	int16_t gyro_z;
+	char mag_st1; // 14 mag ST1 (1B)
+	int16_t mag_x; // 15-16 (2B)
+	int16_t mag_y; // 17-18 (2B)
+	int16_t mag_z; // 19-20 (2B)
+	char mag_st2; // 21 mag ST2 (1B)
 };
 // This data structure is a copy of the segment of the above fifo_packet_with_mag data
 // struture that contains mag data.
-struct mag_data {
-	char        mag_st1; // mag ST1 (1B)
-	int16_t     mag_x;   // uT (2B)
-	int16_t     mag_y;   // uT (2B)
-	int16_t     mag_z;   // uT (2B)
-	char        mag_st2; // mag ST2 (1B)
+struct mag_data
+{
+	char mag_st1; // mag ST1 (1B)
+	int16_t mag_x; // uT (2B)
+	int16_t mag_y; // uT (2B)
+	int16_t mag_z; // uT (2B)
+	char mag_st2; // mag ST2 (1B)
 };
 #pragma pack(pop)
 
-class MPU9250 : public ImuSensor
+class MPU9250: public ImuSensor
 {
 public:
 	MPU9250(const char *device_path, bool mag_enabled = false) :
-		ImuSensor(device_path, MPU9250_MEASURE_INTERVAL_US, mag_enabled), // true = mag is enabled
-		_last_temp_c(0.0f),
-		_temp_initialized(false),
-		_mag_enabled(mag_enabled)
+			ImuSensor(device_path, MPU9250_MEASURE_INTERVAL_US, mag_enabled), // true = mag is enabled
+			_last_temp_c(0.0f), _temp_initialized(false), _mag_enabled(
+					mag_enabled)
 	{
 		m_id.dev_id_s.devtype = DRV_DF_DEVTYPE_MPU9250;
 		// TODO: does the WHOAMI make sense as an address?
@@ -257,4 +268,7 @@ private:
 	MPU9250_mag *_mag;
 };
 
-}; // namespace DriverFramework
+}
+;
+// namespace DriverFramework
+

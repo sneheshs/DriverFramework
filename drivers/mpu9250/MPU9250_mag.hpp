@@ -35,42 +35,54 @@
 
 #include "MPU9250.hpp"
 
-namespace DriverFramework
-{
+namespace DriverFramework {
 // Forward reference:
 class MPU9250;
 
-#define MPU9X50_INTERNAL_SAMPLE_RATE_HZ 1000
+// Magnetometer device ID
+#define MPU9250_AKM_DEV_ID		0x48
 
-///**
-// * Supported Sample rate for gyro.
-// * If gyro sample rate is set to 8KHz, accelerometer sample rate is 1KHz.
-// * If other sample rate is selected, the same sample rate is set for gyro and
-// * accelerometer.
-// */
-//enum gyro_sample_rate_e {
-//   MPU9x50_SAMPLE_RATE_100HZ = 0,
-//   MPU9x50_SAMPLE_RATE_200HZ,
-//   MPU9x50_SAMPLE_RATE_500HZ,
-//   MPU9x50_SAMPLE_RATE_1000HZ,
-//   MPU9x50_SAMPLE_RATE_8000HZ,
-//   NUM_MPU9X50_SAMPLE_RATE
-//};
+// Magnetometer device address
+#define MPU9250_AK8963_I2C_ADDR  0x0C
+#define MPU9250_AK8963_I2C_READ  0x80
+#define MPU9250_AK8963_I2C_WRITE 0x00
 
-enum mag_sample_rate_e {
-   MPU9x50_COMPASS_SAMPLE_RATE_8HZ = 0,
-   MPU9x50_COMPASS_SAMPLE_RATE_100HZ = 1,
-   NUM_MPU9X50_COMPASS_SAMPLE_RATE
+// MPU9250 Magnetometer Register Addresses: Defines only the register addresses
+// used in MPU9250 driver.
+#define MPU9250_MAG_REG_WIA		0x00
+#define MPU9250_MAG_REG_ST1		0x02
+#define MPU9250_MAG_REG_DATA	0x03
+#define MPU9250_MAG_REG_HXL     0x03
+#define MPU9250_MAG_REG_ST2		0x09
+#define MPU9250_MAG_REG_CNTL1	0x0a
+#define MPU9250_MAG_REG_ASAX	0x10
+#define MPU9250_MAG_REG_ASAY    0x11
+#define MPU9250_MAG_REG_ASAZ    0x12
+
+// Bit definitions for the magnetometer registers
+#define BIT_MAG_CNTL1_MODE_POWER_DOWN 0x0
+#define BIT_MAG_CNTL1_MODE_SINGLE_MEASURE_MODE 0x1
+#define BIT_MAG_CNTL1_MODE_CONTINUOUS_MEASURE_MODE_1 0x2
+#define BIT_MAG_CNTL1_MODE_CONTINUOUS_MEASURE_MODE_2 0x6
+#define BIT_MAG_CNTL1_FUSE_ROM_ACCESS_MODE 0xF
+#define BIT_MAG_CNTL1_16_BITS 0x10
+
+enum mag_sample_rate_e
+{
+	MPU9250_MAG_SAMPLE_RATE_8HZ = 0,
+	MPU9250_MAG_SAMPLE_RATE_100HZ = 1,
+	NUM_MPU9250_MAG_SAMPLE_RATES
 };
 
 class MPU9250_mag
 {
 public:
 	MPU9250_mag(MPU9250 &imu, enum mag_sample_rate_e sample_rate) :
-		_mag_initialized(false),
-		_sample_rate(sample_rate),
-		_imu(imu)
-	{ };
+			_mag_initialized(false), _sample_rate(sample_rate), _imu(imu)
+	{
+	};
+
+	// TODO-JYW: Complete this documentation.
 
 	/// @brief
 	/// Called to initialize the magnetometer connection via the
@@ -119,4 +131,5 @@ private:
 	int _initialize();
 };
 
-};
+}
+;
