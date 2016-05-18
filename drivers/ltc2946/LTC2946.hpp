@@ -84,6 +84,9 @@ protected:
 private:
 	// @returns 0 on success, -errno on failure
 	int ltc2946_init();
+	int i2c_read_reg(uint8_t address, uint8_t *out_buffer, int length);
+	int i2c_write_reg(uint8_t address, uint8_t *in_buffer, int length);
+	int configure();
 };
 
 }; // namespace DriverFramework

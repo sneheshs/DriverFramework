@@ -89,10 +89,6 @@ enum LtcModeType
 
 #define LTC2946_BUF_SIZE    32
 
-//*** static uint8_t ltc2946_buffer[LTC2946_BUF_SIZE];
-
-
-//*** static int ltc2946_file_des = -1;  //device file descriptor
 
 using namespace DriverFramework;
 
@@ -101,6 +97,52 @@ LTC2946::LTC2946(const char *device_path) :
 {
 	m_id.dev_id_s.devtype = DRV_DF_DEVTYPE_LTC2946;
 	m_id.dev_id_s.address = LTC2946_I2C_ADDRESS;
+}
+
+int LTC2946::i2c_read_reg(uint8_t address, uint8_t* out_buffer, int length)
+{
+	/* Read the data from the sensor. */
+	int result = _readReg(address, out_buffer, length);
+
+	if (result < 0) {
+		DF_LOG_ERR("error: reading I2C bus failed");
+		return -1;
+	}
+
+	return 0;
+}
+
+
+int LTC2946::i2c_write_reg(uint8_t address, uint8_t *in_buffer, int length)
+{
+	if (length + 1 > LTC2946_BUF_SIZE)
+	{
+		DF_LOG_ERR("ltc2946: Caller's buffer exceeds size of local buffer");
+		return -1;
+	}
+
+	// Verify that the length of the caller's buffer does not exceed the local stack
+	// buffer with one additional byte for the register ID.
+	int result = _writeReg(address, in_buffer, length);
+
+	if (result != 0) {
+		DF_LOG_ERR("error: sensor write failed");
+		return -EIO;
+	}
+
+	return 0;
+}
+
+
+int LTC2946::configure()
+{
+  uint8_t CTRLA = 0b00001000; //Gnd ref, offset evey conv, volt=sense+, alternate volt and curr
+  uint8_t CTRLB = 0b00000100;
+
+  if (i2c_write_reg(0x00, &CTRLA, 1)) return -1;
+  if (i2c_write_reg(0x01, &CTRLB, 1)) return -2;
+
+  return 0;
 }
 
 
@@ -113,6 +155,13 @@ int LTC2946::ltc2946_init()
 	m_sensor_data.current = 0.0f;
 
 	m_synchronize.unlock();
+
+	if (configure()!=0)
+	{
+		DF_LOG_ERR("ltc2946: configure failed!");
+		return -1;
+	}
+
 	DF_LOG_INFO("ltc2946: initialization successful!");
 
 	usleep(1000);
@@ -147,11 +196,11 @@ int LTC2946::start()
 		goto exit;
 	}
 
-	/* Initialize the pressure sensor for active and continuous operation. */
-	result = init();
+	/* Initialize the sensor for active and continuous operation. */
+	result = ltc2946_init();
 
 	if (result != 0) {
-		DF_LOG_ERR("error: pressure sensor initialization failed, sensor read thread not started");
+		DF_LOG_ERR("error: sensor initialization failed, sensor read thread not started");
 		goto exit;
 	}
 
@@ -203,10 +252,12 @@ void LTC2946::_measure(void)
 
 	cntr++;
 
+	// Read raw voltage measurement from 0x1E register (2 bytes)
 	uint8_t vraw[2];
+	if (LTC2946::i2c_read_reg(0x1E,vraw,2)) return;
+	// Read raw current measurement from 0x14 register (2 bytes)
 	uint8_t iraw[2];
-	//*** ltc2946_i2c_read_reg(0x1E,vraw,2);                       //read raw voltage measurement from 0x1E register (2 bytes)
-	//*** ltc2946_i2c_read_reg(0x14,iraw,2);                       //read raw current measurement from 0x14 register (2 bytes)
+	if (LTC2946::i2c_read_reg(0x14,iraw,2)) return;
 
 	uint16_t volt16 = (((uint16_t)vraw[0]) << 8) | vraw[1];  //MSB first
 	volt16        >>= 4;                                     //data is 12 bit and left-aligned
@@ -230,6 +281,7 @@ void LTC2946::_measure(void)
 
 	m_sensor_data.voltage = voltage;
 	m_sensor_data.current = current;
+	m_sensor_data.read_counter = cntr;
 
 	_publish(m_sensor_data);
 
