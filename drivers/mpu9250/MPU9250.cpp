@@ -397,6 +397,7 @@ void MPU9250::_measure()
 		report->gyro_y = swap16(report->gyro_y);
 		report->gyro_z = swap16(report->gyro_z);
 
+
 		// Check if the full accel range of the accel has been used. If this occurs, it is
 		// either a spike due to a crash/landing or a sign that the vibrations levels
 		// measured are excessive.
@@ -448,11 +449,6 @@ void MPU9250::_measure()
 				return;
 			}
 
-			// A FIFO sample is created at 8kHz, which means the interval between samples is 125 us.
-			// The last read FIFO sample at i+1 has an offset of 0.
-			m_sensor_data.time_offset_us = -((read_len / size_of_fifo_packet)
-					- (i + 1)) * 125;
-
 			_last_temp_c = temp_c;
 		}
 
@@ -471,10 +467,6 @@ void MPU9250::_measure()
 		// Pass on the sampling interval between FIFO samples at 8kHz.
 		m_sensor_data.fifo_sample_interval_us = 125;
 
-		// Generate debug output every second, assuming that a sample is generated every
-		// 125 usecs
-#ifdef MPU9250_DEBUG
-		if (++m_sensor_data.read_counter % (1000000 / 125) == 0) {
 		// Flag if this is the last sample, and _publish() should wrap up the data it has received.
 		m_sensor_data.is_last_fifo_sample = ((i + 1) == (read_len / sizeof(fifo_packet)));
 
