@@ -468,7 +468,7 @@ void MPU9250::_measure()
 		m_sensor_data.fifo_sample_interval_us = 125;
 
 		// Flag if this is the last sample, and _publish() should wrap up the data it has received.
-		m_sensor_data.is_last_fifo_sample = ((i + 1) == (read_len / sizeof(fifo_packet)));
+		m_sensor_data.is_last_fifo_sample = ((i + 1) == (read_len / size_of_fifo_packet));
 
 		++m_sensor_data.read_counter;
 		
