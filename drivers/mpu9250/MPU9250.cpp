@@ -105,6 +105,7 @@ int MPU9250::mpu9250_init()
 				BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
 						| BITS_FIFO_ENABLE_GYRO_YOUT
 						| BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL);
+		DF_LOG_INFO("initializing mpu9250 driver without mag support");
 	}
 
 	if (result != 0) {
@@ -464,6 +465,19 @@ void MPU9250::_measure()
 		m_sensor_data.gyro_rad_s_y = float(report->gyro_y) * GYRO_RAW_TO_RAD_S;
 		m_sensor_data.gyro_rad_s_z = float(report->gyro_z) * GYRO_RAW_TO_RAD_S;
 
+		int mag_error;
+		if (_mag_enabled) {
+			struct fifo_packet_with_mag *report_with_mag_data =
+					(struct fifo_packet_with_mag *) report;
+			mag_error = _mag->process(
+					(struct mag_data &) report_with_mag_data->mag_st1);
+			if (mag_error == 0) {
+				m_sensor_data.mag_ga_x = report_with_mag_data->mag_x;
+				m_sensor_data.mag_ga_y = report_with_mag_data->mag_y;
+				m_sensor_data.mag_ga_z = report_with_mag_data->mag_z;
+			}
+		}
+
 		// Pass on the sampling interval between FIFO samples at 8kHz.
 		m_sensor_data.fifo_sample_interval_us = 125;
 
@@ -485,20 +499,14 @@ void MPU9250::_measure()
 		}
 #endif
 
-		if (_mag_enabled) {
-			struct fifo_packet_with_mag *report_with_mag_data =
-					(struct fifo_packet_with_mag *) report;
-			int mag_error = _mag->process(
-					(struct mag_data &) report_with_mag_data->mag_st1);
 #ifdef MPU9250_DEBUG
-			if (mag_error == 0) {
-				if ((m_sensor_data.read_counter % 10000) == 0) {
-					DF_LOG_INFO("     mag:  [%d, %d, %d] ga",
-							report_with_mag_data->mag_x, report_with_mag_data->mag_y, report_with_mag_data->mag_z);
-				}
+		if (_mag_enabled && mag_error == 0) {
+			if ((m_sensor_data.read_counter % 10000) == 0) {
+				DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
+						m_sensor_data.mag_ga_x, m_sensor_data.mag_ga_y, m_sensor_data.mag_ga_z);
 			}
-#endif
 		}
+#endif
 
 		_publish(m_sensor_data);
 
