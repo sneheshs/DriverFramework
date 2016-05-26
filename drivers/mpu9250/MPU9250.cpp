@@ -42,7 +42,8 @@
 
 #define MIN(_x, _y) (_x) > (_y) ? (_y) : (_x)
 
-#define MPU9250_DEBUG 1
+// Uncomment to allow additional debug output to be generated.
+// #define MPU9250_DEBUG 1
 
 using namespace DriverFramework;
 

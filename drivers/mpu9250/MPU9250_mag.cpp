@@ -36,7 +36,8 @@
 
 using namespace DriverFramework;
 
-#define MPU9250_MAG_DEBUG 1
+// Uncomment to allow additional debug output to be generated.
+// #define MPU9250_MAG_DEBUG 1
 
 int MPU9250_mag::_convert_sample_rate_enum_to_hz(
 		enum mag_sample_rate_e sample_rate)
@@ -416,7 +417,9 @@ int MPU9250_mag::write_reg(uint8_t reg, uint8_t val)
 
 int MPU9250_mag::process(struct mag_data &data)
 {
+#ifdef MPU9250_MAG_DEBUG
 	static int hofl_bit_counter = 0;
+#endif
 
 	// Check magnetic sensor overflow HOFL bit set.  No need to check the data ready bit, since
 	// the sample rate divider should provide new samples at the correct interval.
