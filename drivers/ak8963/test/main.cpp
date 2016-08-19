@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2016 Julian Oes. All rights reserved.
+ *   Copyright (C) 2016 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,9 +31,9 @@
  *
  ****************************************************************************/
 
-extern int do_test(unsigned int num_read_attempts);
+extern int do_test();
 
 int main()
 {
-	return do_test(1000);
+	return do_test();
 }

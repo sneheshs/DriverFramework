@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2016 Julian Oes. All rights reserved.
+ *   Copyright (C) 2016 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,9 +31,52 @@
  *
  ****************************************************************************/
 
-extern int do_test(unsigned int num_read_attempts);
+#pragma once
 
-int main()
+#include "MagSensor.hpp"
+
+namespace DriverFramework
 {
-	return do_test(1000);
-}
+
+#define MAG_DEVICE_PATH "/dev/i2c-akm8963"
+
+// 200Hz measurement frequency
+#define AK8963_MEASURE_INTERVAL_US 5000
+
+#define DRV_DF_DEVTYPE_AK8963 0x46
+
+#define AK8963_SLAVE_ADDRESS 0x0D
+
+
+class AK8963 : public MagSensor
+{
+public:
+	AK8963(const char *device_path) :
+		MagSensor(device_path, AK8963_MEASURE_INTERVAL_US)
+	{
+		m_id.dev_id_s.devtype = DRV_DF_DEVTYPE_AK8963;
+		m_id.dev_id_s.address = AK8963_SLAVE_ADDRESS;
+	}
+
+	// @return 0 on success, -errno on failure
+	virtual int start();
+
+	// @return 0 on success, -errno on failure
+	virtual int stop();
+
+protected:
+	virtual void _measure();
+	virtual int _publish(struct mag_sensor_data &data);
+
+private:
+	float _mag_sens_adj[3];
+
+	// returns 0 on success, -errno on failure
+	int ak8963_init();
+	int detect();
+	int get_sensitivity_adjustment();
+	int run_self_test();
+	bool in_range(float value, float min, float max);
+};
+
+}; // namespace DriverFramework

@@ -32,7 +32,7 @@
  ****************************************************************************/
 #include <unistd.h>
 #include "DriverFramework.hpp"
-#include "MPU9250.hpp"
+#include "MPU6050.hpp"
 
 using namespace DriverFramework;
 
@@ -42,19 +42,21 @@ public:
 	static const int TEST_PASS = 0;
 	static const int TEST_FAIL = 1;
 
+	static constexpr unsigned num_read_attempts = 1000;
+
 	ImuTester() :
-		m_sensor(IMU_DEVICE_PATH, true)
+		m_sensor(IMU_DEVICE_PATH)
 	{}
 
 	static void readSensorCallback(void *arg);
 
-	int run(unsigned int num_read_attempts);
+	int run(void);
 
 private:
 	void readSensor();
 	void wait();
 
-	MPU9250		m_sensor;
+	MPU6050		m_sensor;
 	uint32_t	m_read_attempts = 0;
 	uint32_t	m_read_counter = 0;
 
@@ -62,7 +64,7 @@ private:
 	bool		m_done = false;
 };
 
-int ImuTester::run(unsigned int num_read_attempts)
+int ImuTester::run()
 {
 	// Default is fail unless pass critera met
 	m_pass = TEST_FAIL;
@@ -121,8 +123,7 @@ int ImuTester::run(unsigned int num_read_attempts)
 	return m_pass;
 }
 
-extern int do_test(unsigned int num_read_attempts);
-int do_test(unsigned int num_read_attempts)
+int do_test()
 {
 	int ret = Framework::initialize();
 
@@ -133,7 +134,7 @@ int do_test(unsigned int num_read_attempts)
 	ImuTester pt;
 
 	DF_LOG_INFO("Run it");
-	ret = pt.run(num_read_attempts);
+	ret = pt.run();
 
 	Framework::shutdown();
 

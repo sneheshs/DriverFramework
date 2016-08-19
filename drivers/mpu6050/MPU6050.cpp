@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2016 Julian Oes. All rights reserved.
+ *   Copyright (C) 2016 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,23 +35,122 @@
 #include <string.h>
 #include "math.h"
 #include "DriverFramework.hpp"
-#include "MPU9250.hpp"
-#include "MPU9250_mag.hpp"
+#include "MPU6050.hpp"
 
-#define MPU9250_ONE_G	9.80665f
+struct fifo_packet {
+	int16_t accel_x;
+	int16_t accel_y;
+	int16_t accel_z;
+	int16_t temp;
+	int16_t gyro_x;
+	int16_t gyro_y;
+	int16_t gyro_z;
+};
+
+#define MPU6050_ONE_G	9.80665f
 
 #define MIN(_x, _y) (_x) > (_y) ? (_y) : (_x)
 
+#ifndef M_PI_F
+#define M_PI_F 3.14159265358979323846f
+#endif
+
+// LSB sensitivity from the datasheet is 16.4 LSB/degree/s at +-2000 degrees/s
+// and deg to rad conversion
+#define GYRO_RAW_TO_RAD_S 	 (M_PI_F / 180.0f / 16.4f)
+
+#define DIR_READ			0x80
+#define DIR_WRITE			0x00
+
+// MPU 6050 registers
+#define MPUREG_WHOAMI			0x75
+#define MPUREG_SMPLRT_DIV		0x19
+#define MPUREG_CONFIG			0x1A
+#define MPUREG_GYRO_CONFIG		0x1B
+#define MPUREG_ACCEL_CONFIG		0x1C
+#define MPUREG_FIFO_EN			0x23
+#define MPUREG_INT_PIN_CFG		0x37
+#define MPUREG_INT_ENABLE		0x38
+#define MPUREG_INT_STATUS		0x3A
+#define MPUREG_ACCEL_XOUT_H		0x3B
+#define MPUREG_ACCEL_XOUT_L		0x3C
+#define MPUREG_ACCEL_YOUT_H		0x3D
+#define MPUREG_ACCEL_YOUT_L		0x3E
+#define MPUREG_ACCEL_ZOUT_H		0x3F
+#define MPUREG_ACCEL_ZOUT_L		0x40
+#define MPUREG_TEMP_OUT_H		0x41
+#define MPUREG_TEMP_OUT_L		0x42
+#define MPUREG_GYRO_XOUT_H		0x43
+#define MPUREG_GYRO_XOUT_L		0x44
+#define MPUREG_GYRO_YOUT_H		0x45
+#define MPUREG_GYRO_YOUT_L		0x46
+#define MPUREG_GYRO_ZOUT_H		0x47
+#define MPUREG_GYRO_ZOUT_L		0x48
+#define MPUREG_USER_CTRL		0x6A
+#define MPUREG_PWR_MGMT_1		0x6B
+#define MPUREG_PWR_MGMT_2		0x6C
+#define MPUREG_FIFO_COUNTH		0x72
+#define MPUREG_FIFO_COUNTL		0x73
+#define MPUREG_FIFO_R_W			0x74
+#define MPUREG_PRODUCT_ID		0x0C
+#define MPUREG_TRIM1			0x0D
+#define MPUREG_TRIM2			0x0E
+#define MPUREG_TRIM3			0x0F
+#define MPUREG_TRIM4			0x10
+
+// Configuration bits MPU 6050
+#define BIT_SLEEP			0x40
+#define BIT_H_RESET			0x80
+#define BITS_CLKSEL			0x07
+#define MPU_CLK_SEL_PLLGYROX		0x01
+#define MPU_CLK_SEL_PLLGYROZ		0x03
+#define MPU_EXT_SYNC_GYROX		0x02
+#define BITS_GYRO_ST_X			0x80
+#define BITS_GYRO_ST_Y			0x40
+#define BITS_GYRO_ST_Z			0x20
+#define BITS_FS_250DPS			0x00
+#define BITS_FS_500DPS			0x08
+#define BITS_FS_1000DPS			0x10
+#define BITS_FS_2000DPS			0x18
+#define BITS_ACCEL_CONFIG_2G 0x00
+#define BITS_ACCEL_CONFIG_4G 0x08
+#define BITS_ACCEL_CONFIG_8G 0x10
+#define BITS_ACCEL_CONFIG_16G 0x18
+#define BIT_INT_ANYRD_2CLEAR		0x10
+#define BIT_RAW_RDY_EN			0x01
+#define BIT_I2C_IF_DIS			0x10
+#define BIT_INT_STATUS_DATA		0x01
+#define BITS_USER_CTRL_FIFO_RST 0x04
+#define BITS_USER_CTRL_I2C_MST_EN 0x20
+#define BITS_USER_CTRL_FIFO_EN 0x40
+#define BITS_FIFO_ENABLE_TEMP_OUT 0x80
+#define BITS_FIFO_ENABLE_GYRO_XOUT 0x40
+#define BITS_FIFO_ENABLE_GYRO_YOUT 0x20
+#define BITS_FIFO_ENABLE_GYRO_ZOUT 0x10
+#define BITS_FIFO_ENABLE_ACCEL 0x08
+#define BITS_INT_STATUS_FIFO_OVERFLOW 0x10
+#define BITS_DLPF_CFG_260HZ		0x00
+#define BITS_DLPF_CFG_184HZ		0x01
+#define BITS_DLPF_CFG_94HZ		0x02
+#define BITS_DLPF_CFG_44HZ		0x03
+#define BITS_DLPF_CFG_21HZ		0x04
+#define BITS_DLPF_CFG_10HZ		0x05
+#define BITS_DLPF_CFG_5HZ		0x06
+
+// Length of the FIFO used by the sensor to buffer unread
+// sensor data. The FIFO size of the MPU6050 is 1024 bytes.
+// However, we sample and read with 1 kHz, so that most often
+// there is just one packet in the FIFO.
+// Including some slack, we allocate memory for four packets.
+#define MPU_MAX_LEN_FIFO_IN_BYTES (4 * sizeof(fifo_packet))
+
 // Uncomment to allow additional debug output to be generated.
-// #define MPU9250_DEBUG 1
+// #define MPU6050_DEBUG 1
 
 using namespace DriverFramework;
 
-int MPU9250::mpu9250_init()
+int MPU6050::mpu6050_init()
 {
-	// Use 1 MHz for normal registers.
-	_setBusFrequency(SPI_FREQUENCY_1MHZ);
-
 	/* Zero the struct */
 	m_synchronize.lock();
 
@@ -78,211 +177,173 @@ int MPU9250::mpu9250_init()
 
 	m_synchronize.unlock();
 
-	int result = _writeReg(MPUREG_PWR_MGMT_1, BIT_H_RESET);
+	int result = _setSlaveConfig(MPU6050_SLAVE_ADDRESS,
+				     MPU6050_BUS_FREQUENCY_IN_KHZ,
+				     MPU6050_TRANSFER_TIMEOUT_IN_USECS);
 
-	if (result != 0) {
-		DF_LOG_ERR("reset failed");
+	if (result < 0) {
+		DF_LOG_ERR("Could not set slave config");
+	}
+
+	uint8_t bits = BIT_H_RESET;
+	result = _writeReg(MPUREG_PWR_MGMT_1, &bits, 1);
+
+	if (result < 0) {
+		DF_LOG_ERR("Reset failed");
+		return -1;
 	}
 
 	usleep(100000);
 
-	DF_LOG_INFO("Reset MPU9250");
-	result = _writeReg(MPUREG_PWR_MGMT_1, 0);
+	bits = MPU_CLK_SEL_PLLGYROZ;
+	result = _writeReg(MPUREG_PWR_MGMT_1, &bits, 1);
 
-	if (result != 0) {
-		DF_LOG_ERR("wakeup sensor failed");
+	if (result < 0) {
+		DF_LOG_ERR("Wakeup sensor failed");
+		return -1;
 	}
 
 	usleep(1000);
 
-	result = _writeReg(MPUREG_PWR_MGMT_2, 0);
+	// Don't set sensors into standby mode
+	bits = 0;
+	result = _writeReg(MPUREG_PWR_MGMT_2, &bits, 1);
 
-	if (result != 0) {
+	if (result < 0) {
 		DF_LOG_ERR("enable failed");
+		return -1;
 	}
 
 	usleep(1000);
 
-	// Reset I2C master and device.
-	result = _writeReg(MPUREG_USER_CTRL,
-			   BITS_USER_CTRL_I2C_MST_RST |
-			   BITS_USER_CTRL_I2C_IF_DIS);
+	// Enable FIFO.
+	bits = BITS_USER_CTRL_FIFO_RST | BITS_USER_CTRL_FIFO_EN;
+	result = _writeReg(MPUREG_USER_CTRL, &bits, 1);
 
-	if (result != 0) {
-		DF_LOG_ERR("user ctrl 1 failed");
+	if (result < 0) {
+		DF_LOG_ERR("User ctrl failed");
+		return -1;
 	}
 
 	usleep(1000);
 
-	// Reset and enable FIFO.
-	result = _writeReg(MPUREG_USER_CTRL,
-			   BITS_USER_CTRL_FIFO_RST |
-			   BITS_USER_CTRL_FIFO_EN);
+	bits = BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
+	       | BITS_FIFO_ENABLE_GYRO_YOUT
+	       | BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL;
+	result = _writeReg(MPUREG_FIFO_EN,
+			   &bits, 1);
 
-	if (result != 0) {
-		DF_LOG_ERR("user ctrl 2 failed");
-	}
-
-	usleep(1000);
-
-	if (_mag_enabled) {
-		result = _writeReg(MPUREG_FIFO_EN,
-				   BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
-				   | BITS_FIFO_ENABLE_GYRO_YOUT
-				   | BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL
-				   | BITS_FIFO_ENABLE_SLV0); // SLV0 is configured for bulk transfer of mag data over I2C
-
-	} else {
-		result = _writeReg(MPUREG_FIFO_EN,
-				   BITS_FIFO_ENABLE_TEMP_OUT | BITS_FIFO_ENABLE_GYRO_XOUT
-				   | BITS_FIFO_ENABLE_GYRO_YOUT
-				   | BITS_FIFO_ENABLE_GYRO_ZOUT | BITS_FIFO_ENABLE_ACCEL);
-		DF_LOG_INFO("initializing mpu9250 driver without mag support");
-	}
-
-	if (result != 0) {
+	if (result < 0) {
 		DF_LOG_ERR("FIFO enable failed");
+		return -1;
 	}
 
 	usleep(1000);
 
-	/*
-	 * A samplerate_divider of 0 should give 1000Hz:
-	 *
-	 * sample_rate = internal_sample_rate / (1+samplerate_divider)
-	 *
-	 * This is only used when FCHOICE is 0b11, FCHOICE_B (inverted) 0x00,
-	 * therefore commented out.
-	 */
-	//uint8_t samplerate_divider = 0;
-	//result = _writeReg(MPUREG_FIFO_EN, samplerate_divider);
-	//if (result != 0) {
-	//	DF_LOG_ERR("sample rate config failed");
-	//}
-	//usleep(1000);
+	// Set sample frequency
+	bits = BITS_DLPF_CFG_260HZ;
+	result = _writeReg(MPUREG_CONFIG, &bits, 1);
 
-#if defined(__EDISON)
-	//Setting the gyro bandwidth to 250 Hz corresponds to
-	//8kHz sampling frequency which is too high for the Edison.
-	//Therefore, we use the gyro bandwith of 184 Hz which corresponds to 1kHz sampling frequency.
-	result = _writeReg(MPUREG_CONFIG,
-			   BITS_DLPF_CFG_184HZ | BITS_CONFIG_FIFO_MODE_OVERWRITE);
-#else
-	result = _writeReg(MPUREG_CONFIG,
-			   BITS_DLPF_CFG_250HZ | BITS_CONFIG_FIFO_MODE_OVERWRITE);
-#endif
-
-	if (result != 0) {
-		DF_LOG_ERR("config failed");
+	if (result < 0) {
+		DF_LOG_ERR("Config failed");
+		return -1;
 	}
 
 	usleep(1000);
 
-	result = _writeReg(MPUREG_GYRO_CONFIG, BITS_FS_2000DPS | BITS_BW_LT3600HZ);
+	// Set the sample rate divider
+	// sample rate = Gyroscope_Output_Rate / (1 + sample_divider)
+	//
+	// If DLPF is disabled (0 or 7) Gyroscope_Output_Rate = 8 kHz
+	// otherwise Gyroscope_Output_Rate = 1kHz
+	bits = 7;
+	result = _writeReg(MPUREG_SMPLRT_DIV, &bits, 1);
 
-	if (result != 0) {
+	if (result < 0) {
+		DF_LOG_ERR("Set sample divider failed");
+		return -1;
+	}
+
+	usleep(1000);
+
+	// Set the gyro resolution
+	bits = BITS_FS_2000DPS;
+	result = _writeReg(MPUREG_GYRO_CONFIG, &bits, 1);
+
+	if (result < 0) {
 		DF_LOG_ERR("Gyro scale config failed");
+		return -1;
 	}
 
 	usleep(1000);
 
-	result = _writeReg(MPUREG_ACCEL_CONFIG, BITS_ACCEL_CONFIG_16G);
+	// Set the accel resolution
+	bits = BITS_ACCEL_CONFIG_16G;
+	result = _writeReg(MPUREG_ACCEL_CONFIG, &bits, 1);
 
-	if (result != 0) {
+	if (result < 0) {
 		DF_LOG_ERR("Accel scale config failed");
+		return -1;
 	}
 
 	usleep(1000);
-
-	result = _writeReg(MPUREG_ACCEL_CONFIG2, BITS_ACCEL_CONFIG2_BW_1130HZ);
-
-	if (result != 0) {
-		DF_LOG_ERR("Accel scale config2 failed");
-	}
-
-	usleep(1000);
-
-	// Initialize the magnetometer inside the IMU, if enabled by the caller.
-	if (_mag_enabled && _mag == nullptr) {
-		if ((_mag = new MPU9250_mag(*this, MPU9250_MAG_SAMPLE_RATE_100HZ))
-		    != nullptr) {
-			// Initialize the magnetometer, providing the output data rate for
-			// data read from the IMU FIFO.  This is used to calculate the I2C
-			// delay for reading the magnetometer.
-			result = _mag->initialize(MPU9250_MEASURE_INTERVAL_US);
-
-			if (result != 0) {
-				DF_LOG_ERR("Magnetometer initialization failed");
-			}
-
-		} else {
-			DF_LOG_ERR("Allocation of magnetometer object failed.");
-		}
-	}
 
 	// Enable/clear the FIFO of any residual data
 	reset_fifo();
 
-	// Clear Interrupt Status
-	clear_int_status();
-
 	return 0;
 }
 
-int MPU9250::mpu9250_deinit()
+int MPU6050::mpu6050_deinit()
 {
 	// Leave the IMU in a reset state (turned off).
-	int result = _writeReg(MPUREG_PWR_MGMT_1, BIT_H_RESET);
+	uint8_t bits = BIT_H_RESET;
+	int result = _writeReg(MPUREG_PWR_MGMT_1, &bits, 1);
 
 	if (result != 0) {
 		DF_LOG_ERR("reset failed");
 	}
 
-	// Deallocate the resources for the mag driver, if enabled.
-	if (_mag_enabled && _mag != nullptr) {
-		delete _mag;
-		_mag = nullptr;
-	}
-
 	return 0;
 }
 
-int MPU9250::start()
+int MPU6050::start()
 {
 	/* Open the device path specified in the class initialization. */
 	// attempt to open device in start()
-	int result = SPIDevObj::start();
+	int result = I2CDevObj::start();
 
-	if (result != 0) {
+	if (result < 0) {
 		DF_LOG_ERR("DevObj start failed");
 		DF_LOG_ERR("Unable to open the device path: %s", m_dev_path);
 		return result;
 	}
 
-	/* Set the bus frequency for register get/set. */
-	result = _setBusFrequency(SPI_FREQUENCY_1MHZ);
+	result = _setSlaveConfig(MPU6050_SLAVE_ADDRESS,
+				 MPU6050_BUS_FREQUENCY_IN_KHZ,
+				 MPU6050_TRANSFER_TIMEOUT_IN_USECS);
 
-	if (result != 0) {
-		DF_LOG_ERR("failed setting SPI bus frequency: %d", result);
+	if (result < 0) {
+		DF_LOG_ERR("Could not set slave config");
 	}
 
 	/* Try to talk to the sensor. */
 	uint8_t sensor_id;
-	result = _readReg(MPUREG_WHOAMI, sensor_id);
+	result = _readReg(MPUREG_WHOAMI, &sensor_id, 1);
 
-	if (result != 0) {
-		DF_LOG_ERR("Unable to communicate with the MPU9250 sensor");
-		goto exit;
+	if (result < 0) {
+		DF_LOG_ERR("Unable to communicate with the sensor");
+		return -1;
 	}
 
-	if (sensor_id != MPU_WHOAMI_9250) {
-		DF_LOG_ERR("MPU9250 sensor WHOAMI wrong: 0x%X, should be: 0x%X",
-			   sensor_id, MPU_WHOAMI_9250);
+	if (sensor_id != MPU_WHOAMI_6050) {
+		DF_LOG_ERR("MPU6050 sensor WHOAMI wrong: 0x%X, should be: 0x%X",
+			   sensor_id, MPU_WHOAMI_6050);
 		result = -1;
 		goto exit;
 	}
 
-	result = mpu9250_init();
+	result = mpu6050_init();
 
 	if (result != 0) {
 		DF_LOG_ERR("error: IMU sensor initialization failed, sensor read thread not started");
@@ -300,11 +361,11 @@ exit:
 	return result;
 }
 
-int MPU9250::stop()
+int MPU6050::stop()
 {
-	int result = mpu9250_deinit();
+	int result = mpu6050_deinit();
 
-	if (result != 0) {
+	if (result < 0) {
 		DF_LOG_ERR(
 			"error: IMU sensor de-initialization failed.");
 		return result;
@@ -324,65 +385,39 @@ int MPU9250::stop()
 	return 0;
 }
 
-int MPU9250::get_fifo_count()
+int MPU6050::get_fifo_count()
 {
 	int16_t num_bytes = 0x0;
 
-	// Use 1 MHz for normal registers.
-	_setBusFrequency(SPI_FREQUENCY_1MHZ);
-	int ret = _bulkRead(MPUREG_FIFO_COUNTH, (uint8_t *) &num_bytes,
-			    sizeof(num_bytes));
+	int result = _readReg(MPUREG_FIFO_COUNTH, (uint8_t *) &num_bytes, sizeof(num_bytes));
 
-	if (ret == 0) {
-
-		/* TODO: add ifdef for endianness */
-		num_bytes = swap16(num_bytes);
-
-		return num_bytes;
-
-	} else {
+	if (result < 0) {
 		DF_LOG_ERR("FIFO count read failed");
-		return ret;
+		return 0;
 	}
+
+	num_bytes = swap16(num_bytes);
+
+	return num_bytes;
+
 }
 
-void MPU9250::reset_fifo()
+void MPU6050::reset_fifo()
 {
-	// Use 1 MHz for normal registers.
-	_setBusFrequency(SPI_FREQUENCY_1MHZ);
+	uint8_t bits = BITS_USER_CTRL_FIFO_RST | BITS_USER_CTRL_FIFO_EN;
+	int result = _writeReg(MPUREG_USER_CTRL, &bits, 1);
 
-	int result;
-
-	result = _modifyReg(MPUREG_USER_CTRL,
-			    0,
-			    BITS_USER_CTRL_FIFO_RST |
-			    BITS_USER_CTRL_FIFO_EN);
-
-	if (result != 0) {
+	if (result < 0) {
 		DF_LOG_ERR("FIFO reset failed");
 	}
 }
 
-void MPU9250::clear_int_status()
+void MPU6050::_measure()
 {
-	int result;
 	uint8_t int_status = 0;
+	int result = _readReg(MPUREG_INT_STATUS, &int_status, 1);
 
-	result = _readReg(MPUREG_INT_STATUS, int_status);
-
-	if (result != 0) {
-		DF_LOG_ERR("Interrupt status clear failed");
-	}
-}
-
-void MPU9250::_measure()
-{
-	// Use 1 MHz for normal registers.
-	_setBusFrequency(SPI_FREQUENCY_1MHZ);
-	uint8_t int_status = 0;
-	int result = _readReg(MPUREG_INT_STATUS, int_status);
-
-	if (result != 0) {
+	if (result < 0) {
 		m_synchronize.lock();
 		++m_sensor_data.error_counter;
 		m_synchronize.unlock();
@@ -394,32 +429,19 @@ void MPU9250::_measure()
 
 		m_synchronize.lock();
 		++m_sensor_data.fifo_overflow_counter;
-		DF_LOG_ERR("FIFO overflow");
+		DF_LOG_ERR("FIFO overflow: %d", (int)m_sensor_data.fifo_overflow_counter);
 		m_synchronize.unlock();
 
 		return;
 	}
 
-	int size_of_fifo_packet;
-
-	if (_mag_enabled) {
-		size_of_fifo_packet = sizeof(fifo_packet_with_mag);
-
-	} else {
-		size_of_fifo_packet = sizeof(fifo_packet);
-	}
+	int size_of_fifo_packet = sizeof(fifo_packet);
 
 	// Get FIFO byte count to read and floor it to the report size.
-	int bytes_to_read = get_fifo_count() / size_of_fifo_packet
-			    * size_of_fifo_packet;
-
-	// It looks like the FIFO doesn't actually deliver at 8kHz like it is supposed to.
-	// Therefore, we need to adapt the interval which we pass on to the integrator.
-	// The filtering is to lower the jitter that could result through the calculation
-	// because of the fact that the bytes we fetch per _measure() cycle varies.
+	int bytes_to_read = get_fifo_count() / size_of_fifo_packet * size_of_fifo_packet;
 	_packets_per_cycle_filtered = (0.95f * _packets_per_cycle_filtered) + (0.05f * (bytes_to_read / size_of_fifo_packet));
 
-	if (bytes_to_read < 0) {
+	if (bytes_to_read <= 0) {
 		m_synchronize.lock();
 		++m_sensor_data.error_counter;
 		m_synchronize.unlock();
@@ -431,47 +453,22 @@ void MPU9250::_measure()
 	const unsigned buf_len = (MPU_MAX_LEN_FIFO_IN_BYTES / size_of_fifo_packet) * size_of_fifo_packet;
 	uint8_t fifo_read_buf[buf_len];
 
-	if (bytes_to_read <= 0) {
-		m_synchronize.lock();
-		++m_sensor_data.error_counter;
-		m_synchronize.unlock();
-		return;
-	}
-
 	const unsigned read_len = MIN((unsigned)bytes_to_read, buf_len);
 	memset(fifo_read_buf, 0x0, buf_len);
 
-	// According to the protocol specs, all sensor and interrupt registers may be read at 20 MHz.
-	// It is unclear what rate the FIFO register can be read at.
-	// If the FIFO buffer was read at 20 MHz, two effects were seen:
-	// - The buffer is off-by-one. So the report "starts" at &fifo_read_buf[i+1].
-	// - Also, the FIFO buffer seemed to prone to random corruption (or shifting), unless
-	//   all other sensors ran very smooth. (E.g. Changing the bus speed of the HMC5883 driver from
-	//   400 kHz to 100 kHz could cause corruption because this driver wouldn't run as regularly.
-	//
-	// Luckily 10 MHz seems to work fine.
+	result = _readReg(MPUREG_FIFO_R_W, fifo_read_buf, read_len);
 
-#if defined(__EDISON)
-	//FIFO corrupt at 10MHz.
-	_setBusFrequency(SPI_FREQUENCY_5MHZ);
-#else
-	_setBusFrequency(SPI_FREQUENCY_10MHZ);
-#endif
-
-	result = _bulkRead(MPUREG_FIFO_R_W, fifo_read_buf, read_len);
-
-	if (result != 0) {
+	if (result < 0) {
 		m_synchronize.lock();
 		++m_sensor_data.error_counter;
 		m_synchronize.unlock();
 		return;
 	}
 
-	for (unsigned packet_index = 0; packet_index < read_len / size_of_fifo_packet; ++packet_index) {
+	for (unsigned packet_index = 0; packet_index < (read_len / size_of_fifo_packet); ++packet_index) {
 
 		fifo_packet *report = (fifo_packet *)(&fifo_read_buf[packet_index	* size_of_fifo_packet]);
 
-		/* TODO: add ifdef for endianness */
 		report->accel_x = swap16(report->accel_x);
 		report->accel_y = swap16(report->accel_y);
 		report->accel_z = swap16(report->accel_z);
@@ -501,7 +498,7 @@ void MPU9250::_measure()
 			m_synchronize.unlock();
 		}
 
-		const float temp_c = float(report->temp) / 361.0f + 35.0f;
+		const float temp_c = float(report->temp) / 340.0f + 36.53f;
 
 		// Use the temperature field to try to detect if we (ever) fall out of sync with
 		// the FIFO buffer. If the temperature changes insane amounts, reset the FIFO logic
@@ -537,31 +534,18 @@ void MPU9250::_measure()
 
 		m_synchronize.lock();
 		m_sensor_data.accel_m_s2_x = float(report->accel_x)
-					     * (MPU9250_ONE_G / 2048.0f);
+					     * (MPU6050_ONE_G / 2048.0f);
 		m_sensor_data.accel_m_s2_y = float(report->accel_y)
-					     * (MPU9250_ONE_G / 2048.0f);
+					     * (MPU6050_ONE_G / 2048.0f);
 		m_sensor_data.accel_m_s2_z = float(report->accel_z)
-					     * (MPU9250_ONE_G / 2048.0f);
+					     * (MPU6050_ONE_G / 2048.0f);
 		m_sensor_data.temp_c = temp_c;
 		m_sensor_data.gyro_rad_s_x = float(report->gyro_x) * GYRO_RAW_TO_RAD_S;
 		m_sensor_data.gyro_rad_s_y = float(report->gyro_y) * GYRO_RAW_TO_RAD_S;
 		m_sensor_data.gyro_rad_s_z = float(report->gyro_z) * GYRO_RAW_TO_RAD_S;
 
-		if (_mag_enabled) {
-			struct fifo_packet_with_mag *report_with_mag_data = (struct fifo_packet_with_mag *)report;
-
-			int mag_error = _mag->process((const struct mag_data &)report_with_mag_data->mag_st1,
-						      m_sensor_data.mag_ga_x,
-						      m_sensor_data.mag_ga_y,
-						      m_sensor_data.mag_ga_z);
-
-			if (mag_error == MAG_ERROR_DATA_OVERFLOW) {
-				m_sensor_data.mag_fifo_overflow_counter++;
-			}
-		}
-
-		// Pass on the sampling interval between FIFO samples at 8kHz.
-		m_sensor_data.fifo_sample_interval_us = 1000000 / MPU9250_MEASURE_INTERVAL_US
+		// Pass on the sampling interval between FIFO samples at 1kHz.
+		m_sensor_data.fifo_sample_interval_us = 1000000 / MPU6050_MEASURE_INTERVAL_US
 							/ _packets_per_cycle_filtered;
 
 		// Flag if this is the last sample, and _publish() should wrap up the data it has received.
@@ -571,9 +555,9 @@ void MPU9250::_measure()
 
 		// Generate debug output every second, assuming that a sample is generated every
 		// 125 usecs
-#ifdef MPU9250_DEBUG
+#ifdef MPU6050_DEBUG
 
-		if (++m_sensor_data.read_counter % (1000000 / m_sensor_data.fifo_sample_interval_us) == 0) {
+		if (++m_sensor_data.read_counter % (1000000 / 125) == 0) {
 
 			DF_LOG_INFO("IMU: accel: [%f, %f, %f]",
 				    (double)m_sensor_data.accel_m_s2_x,
@@ -588,17 +572,6 @@ void MPU9250::_measure()
 
 #endif
 
-#ifdef MPU9250_DEBUG
-
-		if (_mag_enabled && mag_error == 0) {
-			if ((m_sensor_data.read_counter % 10000) == 0) {
-				DF_LOG_INFO("     mag:  [%f, %f, %f] ga",
-					    m_sensor_data.mag_ga_x, m_sensor_data.mag_ga_y, m_sensor_data.mag_ga_z);
-			}
-		}
-
-#endif
-
 		_publish(m_sensor_data);
 
 		m_synchronize.signal();
@@ -606,7 +579,7 @@ void MPU9250::_measure()
 	}
 }
 
-int MPU9250::_publish(struct imu_sensor_data &data)
+int MPU6050::_publish(struct imu_sensor_data &data)
 {
 	// TBD
 	return -1;

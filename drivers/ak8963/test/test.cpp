@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2016 Julian Oes. All rights reserved.
+ *   Copyright (C) 2016 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,97 +32,95 @@
  ****************************************************************************/
 #include <unistd.h>
 #include "DriverFramework.hpp"
-#include "MPU9250.hpp"
+#include "AK8963.hpp"
+
 
 using namespace DriverFramework;
 
-class ImuTester
+class MagTester
 {
 public:
 	static const int TEST_PASS = 0;
 	static const int TEST_FAIL = 1;
 
-	ImuTester() :
-		m_sensor(IMU_DEVICE_PATH, true)
+	MagTester() :
+		m_sensor(MAG_DEVICE_PATH)
 	{}
 
 	static void readSensorCallback(void *arg);
 
-	int run(unsigned int num_read_attempts);
+	int run(void);
 
 private:
 	void readSensor();
 	void wait();
 
-	MPU9250		m_sensor;
-	uint32_t	m_read_attempts = 0;
-	uint32_t	m_read_counter = 0;
+	AK8963		m_sensor;
+	uint32_t 	m_read_attempts = 0;
+	uint32_t 	m_read_counter = 0;
+	struct mag_sensor_data m_sensor_data;
 
 	int		m_pass;
 	bool		m_done = false;
 };
 
-int ImuTester::run(unsigned int num_read_attempts)
+int MagTester::run()
 {
+	DF_LOG_INFO("Entering: run");
 	// Default is fail unless pass critera met
 	m_pass = TEST_FAIL;
 
 	// Register the driver
 	int ret = m_sensor.init();
 
-	// Open the IMU sensor
+	// Open the mag sensor
 	DevHandle h;
-	DevMgr::getHandle(IMU_DEVICE_PATH, h);
+	DevMgr::getHandle(MAG_DEVICE_PATH, h);
 
 	if (!h.isValid()) {
 		DF_LOG_INFO("Error: unable to obtain a valid handle for the receiver at: %s (%d)",
-			    IMU_DEVICE_PATH, h.getError());
+			    MAG_DEVICE_PATH, h.getError());
 		m_done = true;
 
 	} else {
 		m_done = false;
+		m_sensor_data.read_counter = 0;
 	}
 
 	while (!m_done) {
 		++m_read_attempts;
-
-		struct imu_sensor_data data;
-
-		ret = ImuSensor::getSensorData(h, data, true);
+		ret = MagSensor::getSensorData(h, m_sensor_data, true);
 
 		if (ret == 0) {
-			uint32_t count = data.read_counter;
-			DF_LOG_INFO("count: %d", count);
+			uint32_t count = m_sensor_data.read_counter;
 
 			if (m_read_counter != count) {
+				DF_LOG_INFO("count: %d", count);
 				m_read_counter = count;
-				ImuSensor::printImuValues(h, data);
+				MagSensor::printValues(m_sensor_data);
 			}
 
 		} else {
-			DF_LOG_INFO("error: unable to read the IMU sensor device.");
+			DF_LOG_INFO("error: unable to read the mag sensor device.");
 		}
 
-		if (m_read_counter >= num_read_attempts) {
+		if ((m_read_counter >= 100) && (m_read_attempts == m_read_counter)) {
 			// Done test - PASSED
 			m_pass = TEST_PASS;
 			m_done = true;
 
-		} else if (m_read_attempts > num_read_attempts) {
-			DF_LOG_INFO("error: unable to read the IMU sensor device.");
+		} else if (m_read_attempts > 100) {
+			DF_LOG_INFO("error: unable to read the mag sensor device.");
 			m_done = true;
 		}
 	}
 
-	DevMgr::releaseHandle(h);
-
-	DF_LOG_INFO("Closing IMU sensor");
+	DF_LOG_INFO("Closing mag sensor\n");
 	m_sensor.stop();
 	return m_pass;
 }
 
-extern int do_test(unsigned int num_read_attempts);
-int do_test(unsigned int num_read_attempts)
+int do_test()
 {
 	int ret = Framework::initialize();
 
@@ -130,14 +128,13 @@ int do_test(unsigned int num_read_attempts)
 		return ret;
 	}
 
-	ImuTester pt;
+	MagTester pt;
 
-	DF_LOG_INFO("Run it");
-	ret = pt.run(num_read_attempts);
+	ret = pt.run();
 
 	Framework::shutdown();
 
-	DF_LOG_INFO("Test %s", (ret == ImuTester::TEST_PASS) ? "PASSED" : "FAILED");
+	DF_LOG_INFO("Test %s", (ret == MagTester::TEST_PASS) ? "PASSED" : "FAILED");
 	return ret;
 }
 
