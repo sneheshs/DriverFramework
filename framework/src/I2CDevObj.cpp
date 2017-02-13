@@ -40,8 +40,12 @@
 #include "OSConfig.h"
 #include "I2CDevObj.hpp"
 #include "DevIOCTL.h"
-#ifdef __QURT
+#ifdef __DF_QURT
 #include "dev_fs_lib_i2c.h"
+#elif defined(__DF_LINUX)
+#include <sys/ioctl.h>
+#include <linux/i2c-dev.h>
+#include <linux/i2c.h>
 #endif
 
 using namespace DriverFramework;
@@ -111,7 +115,7 @@ int I2CDevObj::_readReg(uint8_t address, uint8_t *out_buffer, int length)
 		return -1;
 	}
 
-#ifdef __QURT
+#ifdef __DF_QURT
 	struct dspal_i2c_ioctl_combined_write_read ioctl_write_read;
 	uint8_t write_buffer[1];
 
@@ -131,6 +135,49 @@ int I2CDevObj::_readReg(uint8_t address, uint8_t *out_buffer, int length)
 	}
 
 	return 0;
+#elif defined(__DF_LINUX)
+	int result = _writeReg(address, nullptr, 0);
+
+	if (result < 0) {
+		return result;
+	}
+
+	result = _simple_read(out_buffer, length);
+
+	if (result < 0) {
+		return result;
+	}
+
+	return 0;
+#else
+	return -1;
+#endif
+}
+
+int I2CDevObj::_readReg16(uint16_t address, uint16_t *out_buffer, int length)
+{
+
+	if (m_fd == 0) {
+		DF_LOG_ERR("error: i2c bus is not yet opened");
+		return -1;
+	}
+
+#ifdef __DF_QURT
+	return -1;
+#elif defined(__DF_LINUX)
+	int result = _writeReg16(address, nullptr, 0);
+
+	if (result < 0) {
+		return result;
+	}
+
+	result = _simple_read((uint8_t *)out_buffer, length);
+
+	if (result < 0) {
+		return result;
+	}
+
+	return 0;
 #else
 	return -1;
 #endif
@@ -145,15 +192,14 @@ int I2CDevObj::_simple_read(uint8_t *out_buffer, int length)
 		return -1;
 	}
 
-#ifdef __QURT
+#if defined(__DF_QURT) || defined(__DF_LINUX)
 	int bytes_read = 0;
 
 	bytes_read = ::read(m_fd, out_buffer, length);
 
 	if (bytes_read != length) {
-		DF_LOG_ERR(
-			"error: read register reports a read of %d bytes, but attempted to set %d bytes",
-			bytes_read, length);
+		DF_LOG_ERR("error: read register reports a read of %d bytes, but attempted to set %d bytes",
+			   bytes_read, length);
 		return -1;
 	}
 
@@ -165,7 +211,22 @@ int I2CDevObj::_simple_read(uint8_t *out_buffer, int length)
 
 int I2CDevObj::_writeReg(uint8_t address, uint8_t *in_buffer, int length)
 {
+#if defined(__DF_QURT) || defined(__DF_LINUX)
+	unsigned retry_count = 0;
+
+	if (m_fd == 0) {
+		DF_LOG_ERR("error: i2c bus is not yet opened");
+		return -1;
+	}
+
 	uint8_t write_buffer[length + 1];
+
+	if (in_buffer) {
+		memcpy(&write_buffer[1], in_buffer, length);
+	}
+
+	/* Save the address of the register to read from in the write buffer for the combined write. */
+	write_buffer[0] = address;
 
 	/*
 	 * Verify that the length of the caller's buffer does not exceed the local stack
@@ -176,35 +237,89 @@ int I2CDevObj::_writeReg(uint8_t address, uint8_t *in_buffer, int length)
 		return -1;
 	}
 
+	do {
+		int bytes_written = ::write(m_fd, (char *) write_buffer, length + 1);
+
+		if (bytes_written != length + 1) {
+			DF_LOG_ERR("Error: i2c write failed. Reported %d bytes written",
+				   bytes_written);
+
+		} else {
+			return 0;
+		}
+
+	} while (retry_count++ < _retries);
+
+	return -1;
+#else
+
+	return -1;
+#endif
+}
+
+int I2CDevObj::_writeReg16(uint16_t address, uint16_t *in_buffer, int length)
+{
+#if defined(__DF_QURT) || defined(__DF_LINUX)
+	unsigned retry_count = 0;
+
 	if (m_fd == 0) {
 		DF_LOG_ERR("error: i2c bus is not yet opened");
 		return -1;
 	}
 
-	/* Save the address of the register to read from in the write buffer for the combined write. */
-	write_buffer[0] = address;
-	memcpy(&write_buffer[1], in_buffer, length);
-	int bytes_written = ::write(m_fd, (char *) write_buffer, length + 1);
+	uint8_t write_buffer[length + 2];
 
-	if (bytes_written != length + 1) {
-		DF_LOG_ERR("Error: i2c write failed. Reported %d bytes written",
-			   bytes_written);
+	if (in_buffer) {
+		memcpy(&write_buffer[2], in_buffer, length);
+	}
+
+	/* Save the address of the register to read from in the write buffer for the combined write. */
+	write_buffer[0] = (uint8_t)(address & 0xFF);
+	write_buffer[1] = (uint8_t)(address >> 8);
+
+	/*
+	 * Verify that the length of the caller's buffer does not exceed the local stack
+	 * buffer with one additional byte for the register ID.
+	 */
+	if (length + 2 > MAX_LEN_TRANSMIT_BUFFER_IN_BYTES) {
+		DF_LOG_ERR("error: caller's buffer exceeds max len");
 		return -1;
 	}
 
-	return 0;
+	do {
+		int bytes_written = ::write(m_fd, (char *) write_buffer, length + 2);
+
+		if (bytes_written != length + 2) {
+			DF_LOG_ERR("Error: i2c write failed. Reported %d bytes written",
+				   bytes_written);
+
+		} else {
+			return 0;
+		}
+
+	} while (retry_count++ < _retries);
+
+	return -1;
+#else
+
+	return -1;
+#endif
 }
 
 int I2CDevObj::_setSlaveConfig(uint32_t slave_address, uint32_t bus_frequency_khz,
 			       uint32_t transfer_timeout_usec)
 {
-#ifdef __QURT
+#ifdef __DF_QURT
 	struct dspal_i2c_ioctl_slave_config slave_config;
 	memset(&slave_config, 0, sizeof(slave_config));
 	slave_config.slave_address = slave_address;
 	slave_config.bus_frequency_in_khz = bus_frequency_khz;
 	slave_config.byte_transer_timeout_in_usecs = transfer_timeout_usec;
 	return ::ioctl(m_fd, I2C_IOCTL_SLAVE, &slave_config);
+
+#elif defined(__DF_LINUX)
+	return ioctl(m_fd, I2C_SLAVE, slave_address);
+
 #else
 	return -1;
 #endif

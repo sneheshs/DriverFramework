@@ -89,7 +89,7 @@ private:
 		~WorkItem() {}
 
 		void schedule();
-		void updateStats(unsigned int cur_usec);
+		inline void updateStats(unsigned int cur_usec);
 		void resetStats();
 		void dumpStats();
 
@@ -104,18 +104,19 @@ private:
 			resetStats();
 		}
 
-		void 		*m_arg;
-		uint64_t	m_queue_time;
-		WorkCallback	m_callback;
-		uint32_t	m_delay_usec;
-		//WorkHandle 	m_handle;
+		void 		*m_arg = nullptr;
+		uint64_t	m_queue_time = 0;
+		WorkCallback	m_callback = nullptr;
+		uint32_t	m_delay_usec = 0;
 
+#if SHOW_STATS == 1
 		// statistics
-		unsigned long 	m_last;
-		unsigned long 	m_min;
-		unsigned long 	m_max;
-		unsigned long 	m_total;
-		unsigned long 	m_count;
+		unsigned long 	m_last = 0;
+		unsigned long 	m_min = 0;
+		unsigned long 	m_max = 0;
+		unsigned long 	m_total = 0;
+		unsigned long 	m_count = 0;
+#endif
 
 		bool		m_in_use = false;
 
@@ -149,6 +150,7 @@ private:
 	DFUIntList		m_work_list; 	// List of active work items
 	DFManagedList<WorkItem> m_work_items;	// List of all created work items
 	SyncObj			m_lock;
+	uint32_t		m_scheduling_adjustment = 0; // dynamic adjustment to account for scheduling overhead
 };
 
 class RunStatus

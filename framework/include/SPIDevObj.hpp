@@ -58,6 +58,7 @@ class SPIDevObj : public DevObj
 {
 public:
 	enum SPI_FREQUENCY {
+		SPI_FREQUENCY_320KHZ = 320000UL,
 		SPI_FREQUENCY_1MHZ = 1000000UL,
 		SPI_FREQUENCY_5MHZ = 5000000UL,
 		SPI_FREQUENCY_10MHZ = 10000000UL,
@@ -85,7 +86,9 @@ public:
 
 protected:
 	int _readReg(uint8_t address, uint8_t &val);
+	int _writeReg(uint8_t address, uint8_t *in_buffer, uint16_t length);
 	int _writeReg(uint8_t address, uint8_t val);
+	int _modifyReg(uint8_t address, uint8_t clearbits, uint8_t setbits);
 
 	int _bulkRead(uint8_t address, uint8_t *out_buffer, int length);
 	int _setBusFrequency(SPI_FREQUENCY freq_hz);

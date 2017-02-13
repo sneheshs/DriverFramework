@@ -57,7 +57,9 @@ class I2CDevObj : public DevObj
 {
 public:
 	I2CDevObj(const char *name, const char *dev_path, const char *dev_class_path, unsigned int sample_interval_usec) :
-		DevObj(name, dev_path, dev_class_path, DeviceBusType_I2C, sample_interval_usec)
+		DevObj(name, dev_path, dev_class_path, DeviceBusType_I2C, sample_interval_usec),
+		m_fd(-1),
+		_retries(0)
 	{
 		m_id.dev_id_s.bus = DeviceBusType_I2C;
 	}
@@ -73,6 +75,8 @@ public:
 protected:
 	int _readReg(uint8_t address, uint8_t *out_buffer, int length);
 	int _writeReg(uint8_t address, uint8_t *out_buffer, int length);
+	int _readReg16(uint16_t address, uint16_t *out_buffer, int length);
+	int _writeReg16(uint16_t address, uint16_t *out_buffer, int length);
 
 	// read from a register without ioctl
 	int _simple_read(uint8_t *out_buffer, int length);
@@ -80,7 +84,8 @@ protected:
 	int _setSlaveConfig(uint32_t slave_address, uint32_t bus_frequency_khz,
 			    uint32_t transfer_timeout_usec);
 
-	int m_fd = 0;
+	int m_fd;
+	unsigned _retries;
 };
 
 };

@@ -73,7 +73,7 @@ public:
 
 static DFPointerList g_wait_list;
 
-int DevMgr::initialize(void)
+int DevMgr::initialize()
 {
 	g_lock_dev_mgr = new SyncObj();
 
@@ -81,11 +81,13 @@ int DevMgr::initialize(void)
 		return -3;
 	}
 
+	g_lock_dev_mgr->lock();
 	m_initialized = true;
+	g_lock_dev_mgr->unlock();
 	return 0;
 }
 
-void DevMgr::finalize(void)
+void DevMgr::finalize()
 {
 	g_lock_dev_mgr->lock();
 	m_initialized = false;
@@ -272,8 +274,10 @@ void DevMgr::releaseHandle(DevHandle &h)
 		driver->removeHandle(h);
 	}
 
+	g_lock_dev_mgr->lock();
 	h.m_handle = nullptr;
 	h.m_errno = 0;
+	g_lock_dev_mgr->unlock();
 }
 
 void DevMgr::setDevHandleError(DevHandle &h, int error)

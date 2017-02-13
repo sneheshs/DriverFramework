@@ -34,14 +34,13 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************/
 #include "DriverFramework.hpp"
-#ifdef __QURT
+#ifdef __DF_QURT
 #include "dspal_time.h"
 #endif
 #include <time.h>
 
-#if defined(__APPLE__) && defined(__MACH__)
+#if defined(__DF_APPLE_LEGACY)
 #include <sys/time.h>
-#define CLOCK_REALTIME 0
 static int clock_gettime(int clk_id, struct timespec *t)
 {
 	struct timeval now;
@@ -66,10 +65,9 @@ using namespace DriverFramework;
 
 int DriverFramework::absoluteTime(struct timespec &ts)
 {
-#if (defined(__APPLE__) && defined(__MACH__)) || defined(__DF_NUTTX)
-#define CLOCK_REALTIME 0
-	// CLOCK_MONOTONIC not available on Mac or NuttX
-	return clock_gettime(CLOCK_REALTIME, &ts);
+#if defined(__DF_NUTTX)
+	// CLOCK_MONOTONIC not available on NuttX
+	return clock_gettime(0, &ts);
 #else
 	return clock_gettime(CLOCK_MONOTONIC, &ts);
 #endif

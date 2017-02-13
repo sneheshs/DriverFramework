@@ -34,7 +34,7 @@
 #include <string.h>
 #include "DriverFramework.hpp"
 #include "BMP280.hpp"
-#ifdef __QURT
+#ifdef __DF_QURT
 #include "dev_fs_lib_i2c.h"
 #endif
 
@@ -57,7 +57,7 @@ using namespace DriverFramework;
 
 // convertPressure must be called after convertTemperature
 // as convertTemperature sets m_sensor_data.t_fine
-int64_t BMP280::convertPressure(int64_t adc_P)
+uint32_t BMP280::convertPressure(int64_t adc_P)
 {
 	int64_t var1, var2, p;
 	var1 = ((int64_t) m_sensor_data.t_fine) - 128000;
@@ -78,7 +78,7 @@ int64_t BMP280::convertPressure(int64_t adc_P)
 	var2 = (((int64_t) m_sensor_calibration.dig_P8) * p) >> 19;
 	p = ((p + var1 + var2) >> 8) + (((int64_t) m_sensor_calibration.dig_P7) << 4);
 
-	return p;
+	return (uint32_t)p;
 }
 
 int32_t BMP280::convertTemperature(int32_t adc_T)
@@ -278,8 +278,8 @@ void BMP280::_measure(void)
 
 	m_synchronize.lock();
 
-	m_sensor_data.pressure_pa = convertPressure(pressure_from_sensor) / 256.0;
 	m_sensor_data.temperature_c = convertTemperature(temperature_from_sensor) / 100.0;
+	m_sensor_data.pressure_pa = convertPressure(pressure_from_sensor) / 256.0;
 	m_sensor_data.last_read_time_usec = DriverFramework::offsetTime();
 	m_sensor_data.read_counter++;
 

@@ -43,6 +43,10 @@
 #include "SyncObj.hpp"
 #include "WorkItems.hpp"
 
+#ifdef __DF_LINUX
+#include <sys/prctl.h>
+#endif
+
 // Used for backtrace
 #ifdef DF_ENABLE_BACKTRACE
 #include <stdlib.h>
@@ -60,23 +64,23 @@ namespace DriverFramework
 class HRTWorkQueue : public DisableCopy
 {
 public:
-	static HRTWorkQueue &instance(void);
+	static HRTWorkQueue &instance();
 
-	int initialize(void);
-	void finalize(void);
+	int initialize();
+	void finalize();
 
 	void scheduleWorkItem(WorkHandle &wh);
 
-	void shutdown(void);
+	void shutdown();
 	void enableStats(bool enable);
 
 	static void *process_trampoline(void *);
 
 private:
-	HRTWorkQueue(void) {}
-	~HRTWorkQueue(void) {}
+	HRTWorkQueue() {}
+	~HRTWorkQueue() {}
 
-	void process(void);
+	void process();
 
 	bool 	m_enable_stats = false;
 
@@ -155,7 +159,7 @@ static uint64_t getStartTime()
 //-----------------------------------------------------------------------
 
 // NOTE: DO NOT USE DF_LOG_XXX here as it will cause a recursive loop
-uint64_t DriverFramework::offsetTime(void)
+uint64_t DriverFramework::offsetTime()
 {
 	struct timespec ts = {};
 
@@ -310,7 +314,7 @@ void Framework::waitForShutdown()
   HRTWorkQueue
 *************************************************************************/
 
-#ifndef __PX4_QURT
+#ifndef __DF_QURT
 // pthread_setschedparam does not seem to work on QURT.
 static void show_sched_settings()
 {
@@ -350,7 +354,7 @@ void *HRTWorkQueue::process_trampoline(void *arg)
 {
 	DF_LOG_DEBUG("HRTWorkQueue::process_trampoline");
 
-#ifndef __PX4_QURT
+#ifndef __DF_QURT
 	int ret = setRealtimeSched();
 
 	if (ret != 0) {
@@ -359,14 +363,18 @@ void *HRTWorkQueue::process_trampoline(void *arg)
 
 #endif
 
+#ifdef __DF_LINUX
+	prctl(PR_SET_NAME, "DFWorker"); //set the thread name
+#endif
+
 	DF_LOG_DEBUG("process_trampoline %d", ret);
 
 	instance().process();
 
-	return NULL;
+	return nullptr;
 }
 
-HRTWorkQueue &HRTWorkQueue::instance(void)
+HRTWorkQueue &HRTWorkQueue::instance()
 {
 	static HRTWorkQueue *instance = nullptr;
 
@@ -377,7 +385,7 @@ HRTWorkQueue &HRTWorkQueue::instance(void)
 	return *instance;
 }
 
-int HRTWorkQueue::initialize(void)
+int HRTWorkQueue::initialize()
 {
 	DF_LOG_DEBUG("HRTWorkQueue::initialize");
 
@@ -389,7 +397,7 @@ int HRTWorkQueue::initialize(void)
 		return -1;
 	}
 
-#ifdef __QURT
+#ifdef __DF_QURT
 	// Try to set a stack size. This stack size is later used in _measure() calls
 	// in the sensor drivers, at least on QURT.
 	const size_t stacksize = 3072;
@@ -402,7 +410,7 @@ int HRTWorkQueue::initialize(void)
 #endif
 
 	// Create high priority worker thread
-	if (pthread_create(&g_tid, &attr, process_trampoline, NULL)) {
+	if (pthread_create(&g_tid, &attr, process_trampoline, nullptr)) {
 		return -3;
 	}
 
@@ -411,14 +419,14 @@ int HRTWorkQueue::initialize(void)
 	return 0;
 }
 
-void HRTWorkQueue::finalize(void)
+void HRTWorkQueue::finalize()
 {
 	DF_LOG_DEBUG("HRTWorkQueue::finalize");
 
 	shutdown();
 
 	// Wait for work queue thread to exit
-	pthread_join(g_tid, NULL);
+	pthread_join(g_tid, nullptr);
 }
 
 void HRTWorkQueue::scheduleWorkItem(WorkHandle &wh)
@@ -446,7 +454,7 @@ void HRTWorkQueue::scheduleWorkItem(WorkHandle &wh)
 
 }
 
-void HRTWorkQueue::shutdown(void)
+void HRTWorkQueue::shutdown()
 {
 	DF_LOG_DEBUG("HRTWorkQueue::shutdown");
 
@@ -459,11 +467,10 @@ void HRTWorkQueue::shutdown(void)
 	m_reschedule.unlock();
 }
 
-void HRTWorkQueue::process(void)
+void HRTWorkQueue::process()
 {
 	DF_LOG_DEBUG("HRTWorkQueue::process");
 	uint64_t next;
-	timespec ts;
 	uint64_t now;
 
 	while (g_run_status && g_run_status->check()) {
@@ -476,20 +483,15 @@ void HRTWorkQueue::process(void)
 
 		now = offsetTime();
 		DF_LOG_DEBUG("now=%" PRIu64, now);
+#ifdef __DF_QURT
 
-#ifdef __DF_LINUX
-		// This offset removes latency in processing the items on the queue
-		uint64_t TUNING_ADJUSTMENT = 150;
-		next -= TUNING_ADJUSTMENT;
+		// to accomodate sleep inaccuracy in the platform
+		if (next > now + 200) {
+#else
+
+		if (next > now) {
 #endif
-
-		uint64_t wait_time_usec = (next > now) ? next - now : 0;
-
-		// Wait granularity is 200us
-		// TODO: this magic number needs checking
-		if (wait_time_usec > 200) {
-			// pthread_cond_timedwait uses absolute time
-			ts = offsetTimeToAbsoluteTime(next);
+			uint64_t wait_time_usec = next - now;
 
 			DF_LOG_DEBUG("HRTWorkQueue::process waiting for work (%" PRIi64 "usec)", wait_time_usec);
 			// Wait until next expiry or until a new item is rescheduled

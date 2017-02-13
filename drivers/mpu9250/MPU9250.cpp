@@ -114,11 +114,10 @@ int MPU9250::mpu9250_init()
 
 	usleep(1000);
 
-	// Enable I2C again and start FIFO.
+	// Reset and enable FIFO.
 	result = _writeReg(MPUREG_USER_CTRL,
 			   BITS_USER_CTRL_FIFO_RST |
-			   BITS_USER_CTRL_FIFO_EN |
-			   BITS_USER_CTRL_I2C_MST_EN);
+			   BITS_USER_CTRL_FIFO_EN);
 
 	if (result != 0) {
 		DF_LOG_ERR("user ctrl 2 failed");
@@ -161,8 +160,17 @@ int MPU9250::mpu9250_init()
 	//	DF_LOG_ERR("sample rate config failed");
 	//}
 	//usleep(1000);
+
+#if defined(__DF_EDISON)
+	//Setting the gyro bandwidth to 250 Hz corresponds to
+	//8kHz sampling frequency which is too high for the Edison.
+	//Therefore, we use the gyro bandwith of 184 Hz which corresponds to 1kHz sampling frequency.
+	result = _writeReg(MPUREG_CONFIG,
+			   BITS_DLPF_CFG_184HZ | BITS_CONFIG_FIFO_MODE_OVERWRITE);
+#else
 	result = _writeReg(MPUREG_CONFIG,
 			   BITS_DLPF_CFG_250HZ | BITS_CONFIG_FIFO_MODE_OVERWRITE);
+#endif
 
 	if (result != 0) {
 		DF_LOG_ERR("config failed");
@@ -212,9 +220,11 @@ int MPU9250::mpu9250_init()
 		}
 	}
 
-	// Enable/clear the FIFO of any residual data and enable the I2C master clock, if the mag is
-	// enabled.
+	// Enable/clear the FIFO of any residual data
 	reset_fifo();
+
+	// Clear Interrupt Status
+	clear_int_status();
 
 	return 0;
 }
@@ -343,20 +353,25 @@ void MPU9250::reset_fifo()
 
 	int result;
 
-	if (_mag_enabled) {
-		result = _writeReg(MPUREG_USER_CTRL,
-				   BITS_USER_CTRL_FIFO_RST |
-				   BITS_USER_CTRL_FIFO_EN |
-				   BITS_USER_CTRL_I2C_MST_EN);
-
-	} else {
-		result = _writeReg(MPUREG_USER_CTRL,
-				   BITS_USER_CTRL_FIFO_RST |
-				   BITS_USER_CTRL_FIFO_EN);
-	}
+	result = _modifyReg(MPUREG_USER_CTRL,
+			    0,
+			    BITS_USER_CTRL_FIFO_RST |
+			    BITS_USER_CTRL_FIFO_EN);
 
 	if (result != 0) {
 		DF_LOG_ERR("FIFO reset failed");
+	}
+}
+
+void MPU9250::clear_int_status()
+{
+	int result;
+	uint8_t int_status = 0;
+
+	result = _readReg(MPUREG_INT_STATUS, int_status);
+
+	if (result != 0) {
+		DF_LOG_ERR("Interrupt status clear failed");
 	}
 }
 
@@ -398,6 +413,12 @@ void MPU9250::_measure()
 	int bytes_to_read = get_fifo_count() / size_of_fifo_packet
 			    * size_of_fifo_packet;
 
+	// It looks like the FIFO doesn't actually deliver at 8kHz like it is supposed to.
+	// Therefore, we need to adapt the interval which we pass on to the integrator.
+	// The filtering is to lower the jitter that could result through the calculation
+	// because of the fact that the bytes we fetch per _measure() cycle varies.
+	_packets_per_cycle_filtered = (0.95f * _packets_per_cycle_filtered) + (0.05f * (bytes_to_read / size_of_fifo_packet));
+
 	if (bytes_to_read < 0) {
 		m_synchronize.lock();
 		++m_sensor_data.error_counter;
@@ -430,7 +451,13 @@ void MPU9250::_measure()
 	//
 	// Luckily 10 MHz seems to work fine.
 
+#if defined(__DF_EDISON)
+	//FIFO corrupt at 10MHz.
+	_setBusFrequency(SPI_FREQUENCY_5MHZ);
+#else
 	_setBusFrequency(SPI_FREQUENCY_10MHZ);
+#endif
+
 	result = _bulkRead(MPUREG_FIFO_R_W, fifo_read_buf, read_len);
 
 	if (result != 0) {
@@ -496,7 +523,7 @@ void MPU9250::_measure()
 			if (fabsf(temp_c - _last_temp_c) > 2.0f) {
 				DF_LOG_ERR(
 					"FIFO corrupt, temp difference: %f, last temp: %f, current temp: %f",
-					fabs(temp_c - _last_temp_c), (double)_last_temp_c, (double)temp_c);
+					(double)fabsf(temp_c - _last_temp_c), (double)_last_temp_c, (double)temp_c);
 				reset_fifo();
 				_temp_initialized = false;
 				m_synchronize.lock();
@@ -534,7 +561,8 @@ void MPU9250::_measure()
 		}
 
 		// Pass on the sampling interval between FIFO samples at 8kHz.
-		m_sensor_data.fifo_sample_interval_us = 125;
+		m_sensor_data.fifo_sample_interval_us = 1000000 / MPU9250_MEASURE_INTERVAL_US
+							/ _packets_per_cycle_filtered;
 
 		// Flag if this is the last sample, and _publish() should wrap up the data it has received.
 		m_sensor_data.is_last_fifo_sample = ((packet_index + 1) == (read_len / size_of_fifo_packet));
@@ -545,7 +573,7 @@ void MPU9250::_measure()
 		// 125 usecs
 #ifdef MPU9250_DEBUG
 
-		if (++m_sensor_data.read_counter % (1000000 / 125) == 0) {
+		if (++m_sensor_data.read_counter % (1000000 / m_sensor_data.fifo_sample_interval_us) == 0) {
 
 			DF_LOG_INFO("IMU: accel: [%f, %f, %f]",
 				    (double)m_sensor_data.accel_m_s2_x,

@@ -11,7 +11,7 @@ matrix:
     - os: linux
       sudo: false
     - os: osx
-      osx_image: beta-xcode6.3
+      osx_image: xcode8
       sudo: true
 
 addons:
@@ -41,5 +41,8 @@ before_script:
   - export PATH=~/bin:$PATH
 
 script:
-  - make check-style
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
+      make check-style
+      ;
+    fi
   - make run

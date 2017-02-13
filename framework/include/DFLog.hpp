@@ -35,7 +35,6 @@
 *************************************************************************/
 #pragma once
 
-#define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -49,9 +48,9 @@ uint64_t offsetTime(void);
 
 #define DF_INFO 0
 
-#ifdef __QURT
+#ifdef __DF_QURT
 
-#include <stdarg.h>
+#include <cstdarg>
 
 extern "C" {
 
@@ -79,7 +78,7 @@ static __inline void qurt_log_2(int level, const char *file, int line, const cha
 #define DF_LOG_DEBUG(FMT, ...)
 #endif
 
-#elif defined(__PX4_NUTTX)
+#elif defined(__DF_NUTTX)
 
 // TODO: Substitute logging implementation here
 

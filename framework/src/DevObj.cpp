@@ -34,6 +34,7 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************/
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include "DevObj.hpp"
@@ -48,8 +49,8 @@ DevObj::DevObj(const char *name, const char *dev_path, const char *dev_class_pat
 	m_dev_class_path(nullptr),
 	m_dev_instance_path(nullptr),
 	m_sample_interval_usecs(sample_interval_usecs),
-	m_id{},
-	m_work_handle{},
+	m_id {},
+	m_work_handle {},
 	m_pub_blocked(false),
 	m_driver_instance(-1),
 	m_refcount(0)
@@ -125,7 +126,7 @@ DevObj::~DevObj()
 	}
 }
 
-int DevObj::init(void)
+int DevObj::init()
 {
 	DF_LOG_DEBUG("DevObj::init %s", m_name);
 
@@ -147,7 +148,7 @@ int DevObj::init(void)
 	return 0;
 }
 
-int DevObj::start(void)
+int DevObj::start()
 {
 	DF_LOG_DEBUG("DevObj::start %s", m_name);
 
@@ -165,21 +166,25 @@ int DevObj::start(void)
 		return -3;
 
 	} else {
-		WorkMgr::getWorkHandle(measure, this, m_sample_interval_usecs, m_work_handle);
+		do {
+			WorkMgr::getWorkHandle(measure, this, m_sample_interval_usecs, m_work_handle);
 
-		if (m_work_handle.isValid()) {
+			if (!m_work_handle.isValid()) {
+				return -m_work_handle.getError();
+			}
+
 			DF_LOG_DEBUG("DevObj::start schedule %s", m_name);
 			WorkMgr::schedule(m_work_handle);
 
-		} else {
-			return -4;
-		}
+			//if someone else calls getWorkHandle at the same time, both will return the same handle,
+			//and one of the schedule() calls will then fail with EBUSY. In that case just retry.
+		} while (m_work_handle.getError() == EBUSY);
 	}
 
-	return 0;
+	return -m_work_handle.getError();
 }
 
-int DevObj::stop(void)
+int DevObj::stop()
 {
 	DF_LOG_DEBUG("DevObj::stop %s", m_name);
 
@@ -322,8 +327,20 @@ void DevObj::setSampleInterval(unsigned int sample_interval_usecs)
 
 		// Reschedule if non-zero and initialized
 		if (m_sample_interval_usecs != 0) {
-			WorkMgr::getWorkHandle(measure, this, m_sample_interval_usecs, m_work_handle);
-			WorkMgr::schedule(m_work_handle);
+			WorkMgr::releaseWorkHandle(m_work_handle);
+
+			do {
+				WorkMgr::getWorkHandle(measure, this, m_sample_interval_usecs, m_work_handle);
+
+				if (!m_work_handle.isValid()) {
+					return;
+				}
+
+				WorkMgr::schedule(m_work_handle);
+
+				//if someone else calls getWorkHandle at the same time, both will return the same handle,
+				//and one of the schedule() calls will then fail with EBUSY. In that case just retry.
+			} while (m_work_handle.getError() == EBUSY);
 		}
 	}
 }
