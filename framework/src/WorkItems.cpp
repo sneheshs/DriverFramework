@@ -34,6 +34,11 @@
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************/
 
+// TODO-JYW: TESTING-TESTING
+#define DF_DEBUG 1
+#define SHOW_STATS 1
+// TODO-JYW: TESTING-TESTING
+
 #include <errno.h>
 #include "DriverFramework.hpp"
 #include "SyncObj.hpp"

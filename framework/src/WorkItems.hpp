@@ -38,6 +38,10 @@
 #include "SyncObj.hpp"
 #include "DFList.hpp"
 
+// TODO-JYW: TESTING-TESTING
+#define SHOW_STATS 1
+// TODO-JYW: TESTING-TESTING
+
 namespace DriverFramework
 {
 class WorkItems

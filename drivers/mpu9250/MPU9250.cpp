@@ -31,6 +31,9 @@
  *
  ****************************************************************************/
 
+// Uncomment to allow additional debug output to be generated.
+#define MPU9250_DEBUG 1
+
 #include <stdint.h>
 #include <string.h>
 #include "math.h"
@@ -42,9 +45,6 @@
 
 #define MIN(_x, _y) (_x) > (_y) ? (_y) : (_x)
 
-// Uncomment to allow additional debug output to be generated.
-// #define MPU9250_DEBUG 1
-
 using namespace DriverFramework;
 
 int MPU9250::mpu9250_init()
@@ -53,7 +53,8 @@ int MPU9250::mpu9250_init()
 	_setBusFrequency(SPI_FREQUENCY_1MHZ);
 
 	/* Zero the struct */
-	m_synchronize.lock();
+	// TODO-JYW: TESTING-TESTING
+	// m_synchronize.lock();
 
 	m_sensor_data.accel_m_s2_x = 0.0f;
 	m_sensor_data.accel_m_s2_y = 0.0f;
@@ -76,7 +77,8 @@ int MPU9250::mpu9250_init()
 	m_sensor_data.fifo_sample_interval_us = 0;
 	m_sensor_data.is_last_fifo_sample = false;
 
-	m_synchronize.unlock();
+  // TODO-JYW: TESTING-TESTING
+	// m_synchronize.unlock();
 
 	int result = _writeReg(MPUREG_PWR_MGMT_1, BIT_H_RESET);
 
@@ -377,34 +379,51 @@ void MPU9250::clear_int_status()
 
 void MPU9250::_measure()
 {
+  // TODO-JYW: TESTING-TESTING
+  DF_LOG_INFO("entering MPU9250::_measure");
+//  _setBusFrequency(SPI_FREQUENCY_1MHZ);
+//  DF_LOG_INFO("exiting MPU9250::_measure");
+//  return;
+  // TODO-JYW: TESTING-TESTING
+
 	// Use 1 MHz for normal registers.
-	_setBusFrequency(SPI_FREQUENCY_1MHZ);
-	uint8_t int_status = 0;
-	int result = _readReg(MPUREG_INT_STATUS, int_status);
+//  DF_LOG_INFO("MPU9250::setBusFrequency().");
+//// TODO-JYW: TESTING-TESTING
+//	_setBusFrequency(SPI_FREQUENCY_1MHZ);
+//	uint8_t int_status = 0;
+//  DF_LOG_INFO("MPU9250::_readReg().");
+//	int result = _readReg(MPUREG_INT_STATUS, int_status);
+//
+//	if (result != 0) {
+//// TODO-JYW: TESTING-TESTING
+////		m_synchronize.lock();
+//		++m_sensor_data.error_counter;
+////		m_synchronize.unlock();
+//		return;
+//	}
+//
+//	if (int_status & BITS_INT_STATUS_FIFO_OVERFLOW) {
+  // TODO-JYW: TESTING-TESTING
+//	  DF_LOG_INFO("MPU9250::reset_fifo().");
+//		reset_fifo();
+//		return;
+//// TODO-JYW: TESTING-TESTING
+////		m_synchronize.lock();
+//		++m_sensor_data.fifo_overflow_counter;
+//		DF_LOG_ERR("FIFO overflow");
+////		m_synchronize.unlock();
+//
+//		return;
+//	}
 
-	if (result != 0) {
-		m_synchronize.lock();
-		++m_sensor_data.error_counter;
-		m_synchronize.unlock();
-		return;
-	}
-
-	if (int_status & BITS_INT_STATUS_FIFO_OVERFLOW) {
-		reset_fifo();
-
-		m_synchronize.lock();
-		++m_sensor_data.fifo_overflow_counter;
-		DF_LOG_ERR("FIFO overflow");
-		m_synchronize.unlock();
-
-		return;
-	}
+  // TODO-JYW: Trying to identify the source of the SPI problem, in terms
+  // of the suspect function.
+  int result;
 
 	int size_of_fifo_packet;
 
 	if (_mag_enabled) {
 		size_of_fifo_packet = sizeof(fifo_packet_with_mag);
-
 	} else {
 		size_of_fifo_packet = sizeof(fifo_packet);
 	}
@@ -420,11 +439,18 @@ void MPU9250::_measure()
 	_packets_per_cycle_filtered = (0.95f * _packets_per_cycle_filtered) + (0.05f * (bytes_to_read / size_of_fifo_packet));
 
 	if (bytes_to_read < 0) {
-		m_synchronize.lock();
+	  // TODO-JYW: TESTING-TESTING
+//		m_synchronize.lock();
 		++m_sensor_data.error_counter;
-		m_synchronize.unlock();
+//		m_synchronize.unlock();
 		return;
 	}
+
+	// TODO-JYW: TESTING-TESTING:
+	DF_LOG_INFO("Bytes received: %d.", bytes_to_read);
+  DF_LOG_INFO("MPU9250::reset_fifo().");
+  reset_fifo();
+  return;
 
 	// Allocate a buffer large enough for n complete packets, read from the
 	// sensor FIFO.
@@ -432,9 +458,10 @@ void MPU9250::_measure()
 	uint8_t fifo_read_buf[buf_len];
 
 	if (bytes_to_read <= 0) {
-		m_synchronize.lock();
+	  // TODO-JYW: TESTING-TESTING
+//		m_synchronize.lock();
 		++m_sensor_data.error_counter;
-		m_synchronize.unlock();
+//		m_synchronize.unlock();
 		return;
 	}
 
@@ -455,15 +482,18 @@ void MPU9250::_measure()
 	//FIFO corrupt at 10MHz.
 	_setBusFrequency(SPI_FREQUENCY_5MHZ);
 #else
-	_setBusFrequency(SPI_FREQUENCY_10MHZ);
+  DF_LOG_INFO("MPU9250::setBusFrequency().");
+  // TODO-JYW: TESTING-TESTING
+	_setBusFrequency(SPI_FREQUENCY_5MHZ);
 #endif
-
+  DF_LOG_INFO("MPU9250::bulkRead().");
 	result = _bulkRead(MPUREG_FIFO_R_W, fifo_read_buf, read_len);
 
 	if (result != 0) {
-		m_synchronize.lock();
+	  // TODO-JYW: TESTING-TESTING
+//		m_synchronize.lock();
 		++m_sensor_data.error_counter;
-		m_synchronize.unlock();
+//		m_synchronize.unlock();
 		return;
 	}
 
@@ -480,25 +510,26 @@ void MPU9250::_measure()
 		report->gyro_y = swap16(report->gyro_y);
 		report->gyro_z = swap16(report->gyro_z);
 
-
 		// Check if the full accel range of the accel has been used. If this occurs, it is
 		// either a spike due to a crash/landing or a sign that the vibrations levels
 		// measured are excessive.
 		if (report->accel_x == INT16_MIN || report->accel_x == INT16_MAX ||
 		    report->accel_y == INT16_MIN || report->accel_y == INT16_MAX ||
 		    report->accel_z == INT16_MIN || report->accel_z == INT16_MAX) {
-			m_synchronize.lock();
+		  // TODO-JYW: TESTING-TESTING
+//			m_synchronize.lock();
 			++m_sensor_data.accel_range_hit_counter;
-			m_synchronize.unlock();
+//			m_synchronize.unlock();
 		}
 
 		// Also check the full gyro range, however, this is very unlikely to happen.
 		if (report->gyro_x == INT16_MIN || report->gyro_x == INT16_MAX ||
 		    report->gyro_y == INT16_MIN || report->gyro_y == INT16_MAX ||
 		    report->gyro_z == INT16_MIN || report->gyro_z == INT16_MAX) {
-			m_synchronize.lock();
+		  // TODO-JYW: TESTING-TESTING
+//			m_synchronize.lock();
 			++m_sensor_data.gyro_range_hit_counter;
-			m_synchronize.unlock();
+//			m_synchronize.unlock();
 		}
 
 		const float temp_c = float(report->temp) / 361.0f + 35.0f;
@@ -526,16 +557,19 @@ void MPU9250::_measure()
 					(double)fabsf(temp_c - _last_temp_c), (double)_last_temp_c, (double)temp_c);
 				reset_fifo();
 				_temp_initialized = false;
-				m_synchronize.lock();
+			  // TODO-JYW: TESTING-TESTING
+//				m_synchronize.lock();
 				++m_sensor_data.fifo_corruption_counter;
-				m_synchronize.unlock();
+//				m_synchronize.unlock();
 				return;
 			}
 
 			_last_temp_c = temp_c;
 		}
 
-		m_synchronize.lock();
+//    DF_LOG_INFO("MPU9250::_measure lock.");
+    // TODO-JYW: TESTING-TESTING
+//		m_synchronize.lock();
 		m_sensor_data.accel_m_s2_x = float(report->accel_x)
 					     * (MPU9250_ONE_G / 2048.0f);
 		m_sensor_data.accel_m_s2_y = float(report->accel_y)
@@ -547,10 +581,11 @@ void MPU9250::_measure()
 		m_sensor_data.gyro_rad_s_y = float(report->gyro_y) * GYRO_RAW_TO_RAD_S;
 		m_sensor_data.gyro_rad_s_z = float(report->gyro_z) * GYRO_RAW_TO_RAD_S;
 
+		int mag_error;
 		if (_mag_enabled) {
 			struct fifo_packet_with_mag *report_with_mag_data = (struct fifo_packet_with_mag *)report;
 
-			int mag_error = _mag->process((const struct mag_data &)report_with_mag_data->mag_st1,
+			mag_error = _mag->process((const struct mag_data &)report_with_mag_data->mag_st1,
 						      m_sensor_data.mag_ga_x,
 						      m_sensor_data.mag_ga_y,
 						      m_sensor_data.mag_ga_z);
@@ -598,12 +633,17 @@ void MPU9250::_measure()
 		}
 
 #endif
-
+	  DF_LOG_INFO("MPU9250::publish().");
 		_publish(m_sensor_data);
 
-		m_synchronize.signal();
-		m_synchronize.unlock();
+// TODO-JYW: TESTING-TESTING
+//		m_synchronize.signal();
+//    DF_LOG_INFO("MPU9250::_measure unlock.");
+//		m_synchronize.unlock();
 	}
+
+  // TODO-JYW: TESTING-TESTING
+  DF_LOG_INFO("exiting MPU9250::_measure");
 }
 
 int MPU9250::_publish(struct imu_sensor_data &data)

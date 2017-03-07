@@ -33,6 +33,13 @@
 * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *************************************************************************/
+
+// TODO-JYW: TESTING-TESTING
+#define SHOW_STATS 1
+#define DF_DEBUG 1
+// #define SHOW_STATS 0
+
+
 #include <stdio.h>
 #include <pthread.h>
 #include <errno.h>
@@ -52,8 +59,6 @@
 #include <stdlib.h>
 #include <execinfo.h>
 #endif
-
-#define SHOW_STATS 0
 
 namespace DriverFramework
 {
@@ -354,8 +359,9 @@ void *HRTWorkQueue::process_trampoline(void *arg)
 {
 	DF_LOG_DEBUG("HRTWorkQueue::process_trampoline");
 
+	int ret = 0;
 #ifndef __DF_QURT
-	int ret = setRealtimeSched();
+	ret = setRealtimeSched();
 
 	if (ret != 0) {
 		DF_LOG_ERR("WARNING: setRealtimeSched failed (not run as root?)");
@@ -400,7 +406,9 @@ int HRTWorkQueue::initialize()
 #ifdef __DF_QURT
 	// Try to set a stack size. This stack size is later used in _measure() calls
 	// in the sensor drivers, at least on QURT.
-	const size_t stacksize = 3072;
+	// TODO-JYW: TESTING-TESTING
+	const size_t stacksize = 5120;
+//	const size_t stacksize = 3072;
 
 	if (pthread_attr_setstacksize(&attr, stacksize) != 0) {
 		DF_LOG_ERR("failed to set stack size of %lu bytes", stacksize);
@@ -483,6 +491,7 @@ void HRTWorkQueue::process()
 
 		now = offsetTime();
 		DF_LOG_DEBUG("now=%" PRIu64, now);
+		uint64_t wait_time_usec = 0;
 #ifdef __DF_QURT
 
 		// to accomodate sleep inaccuracy in the platform
@@ -491,7 +500,7 @@ void HRTWorkQueue::process()
 
 		if (next > now) {
 #endif
-			uint64_t wait_time_usec = next - now;
+			wait_time_usec = next - now;
 
 			DF_LOG_DEBUG("HRTWorkQueue::process waiting for work (%" PRIi64 "usec)", wait_time_usec);
 			// Wait until next expiry or until a new item is rescheduled
